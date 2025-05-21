@@ -14,10 +14,10 @@ export function HomePage() {
         <div className="container mx-auto px-4 z-10">
           <div className="max-w-3xl space-y-6">
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-              Secure, Powerful Authentication
+            Decentralized Data Registry: Public and Protected
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl">
-              A modern authentication system with all the features you need, beautifully designed and built with the latest web technologies.
+            A modern directory creation system with all the features you need, beautifully designed and built with the latest web technologies.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <Button size="lg" onClick={() => navigate('/signup')}>
@@ -40,7 +40,7 @@ export function HomePage() {
               Powerful Features
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to build a secure, modern authentication system for your application.
+              Everything you need to build a secure, modern directory creation system for your application.
             </p>
           </div>
 
@@ -48,7 +48,7 @@ export function HomePage() {
             <Card className="transition-all duration-300 hover:shadow-lg">
               <CardHeader>
                 <Shield className="h-12 w-12 text-primary mb-4" />
-                <CardTitle>Secure Authentication</CardTitle>
+                <CardTitle>Secure Directory Creation</CardTitle>
                 <CardDescription>
                   Industry-standard security practices with password hashing and protection against common attacks.
                 </CardDescription>
@@ -66,9 +66,9 @@ export function HomePage() {
             <Card className="transition-all duration-300 hover:shadow-lg">
               <CardHeader>
                 <Users className="h-12 w-12 text-primary mb-4" />
-                <CardTitle>User Management</CardTitle>
+                <CardTitle>Directory Management</CardTitle>
                 <CardDescription>
-                  Complete user management with registration, login, and profile updates.
+                  Complete directory management with registration, login, and profile updates.
                 </CardDescription>
               </CardHeader>
               <CardContent>
