@@ -53,7 +53,7 @@ export function Header() {
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <h2 className="text-xl font-bold text-primary">AppName</h2>
+          <h2 className="text-xl font-bold text-primary">DEDI-Publish</h2>
         </Link>
         
         {/* Desktop navigation */}

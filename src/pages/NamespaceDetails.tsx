@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Upload, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -8,9 +8,29 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
 
 // Mock data for registries - will be replaced with API data later
@@ -33,6 +53,15 @@ const mockRegistries = [
   },
 ];
 
+interface Registry {
+  id: number;
+  name: string;
+  description: string;
+  schema: string;
+  metadata: string;
+  createdAt: string;
+}
+
 interface RegistryFormData {
   name: string;
   description: string;
@@ -40,17 +69,36 @@ interface RegistryFormData {
   metadata: string;
 }
 
+interface DelegateFormData {
+  email: string;
+  permission: string;
+}
+
 export function NamespaceDetailsPage() {
   const { namespaceId } = useParams();
   const { toast } = useToast();
-  const [registries, setRegistries] = useState(mockRegistries);
+  const [registries, setRegistries] = useState<Registry[]>(mockRegistries);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
+  const [isArchiveAlertOpen, setIsArchiveAlertOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
-  const [formData, setFormData] = useState<RegistryFormData>({
+  const [selectedRegistry, setSelectedRegistry] = useState<Registry | null>(null);
+  const [createFormData, setCreateFormData] = useState<RegistryFormData>({
     name: '',
     description: '',
     schema: '',
     metadata: '',
+  });
+  const [updateFormData, setUpdateFormData] = useState<RegistryFormData>({
+    name: '',
+    description: '',
+    schema: '',
+    metadata: '',
+  });
+  const [delegateFormData, setDelegateFormData] = useState<DelegateFormData>({
+    email: '',
+    permission: '',
   });
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
 
@@ -62,16 +110,102 @@ export function NamespaceDetailsPage() {
   const handleCreateRegistry = async () => {
     try {
       // API call will be added here later
+      console.log('Creating registry:', createFormData);
       toast({
         title: 'Success',
         description: 'Registry created successfully',
       });
       setIsCreateModalOpen(false);
-      setFormData({ name: '', description: '', schema: '', metadata: '' });
+      setCreateFormData({ name: '', description: '', schema: '', metadata: '' });
+      // Potentially refresh registries list here
     } catch (error) {
       toast({
         title: 'Error',
         description: 'Failed to create registry',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOpenUpdateModal = (registry: Registry) => {
+    setSelectedRegistry(registry);
+    setUpdateFormData({
+      name: registry.name,
+      description: registry.description,
+      schema: registry.schema,
+      metadata: registry.metadata,
+    });
+    setIsUpdateModalOpen(true);
+  };
+
+  const handleUpdateRegistry = async () => {
+    if (!selectedRegistry) return;
+    try {
+      // API call for update will be added here later
+      console.log('Updating registry:', selectedRegistry.id, updateFormData);
+      toast({
+        title: 'Success',
+        description: 'Registry updated successfully',
+      });
+      setIsUpdateModalOpen(false);
+      setSelectedRegistry(null);
+      // Potentially refresh registries list here
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update registry',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOpenDelegateModal = (registry: Registry) => {
+    setSelectedRegistry(registry);
+    setIsDelegateModalOpen(true);
+  };
+
+  const handleDelegateRegistry = async () => {
+    if (!selectedRegistry) return;
+    try {
+      // API call for delegate will be added here later
+      console.log('Delegating registry:', selectedRegistry.id, delegateFormData);
+      toast({
+        title: 'Success',
+        description: 'Registry delegation initiated successfully',
+      });
+      setIsDelegateModalOpen(false);
+      setSelectedRegistry(null);
+      setDelegateFormData({ email: '', permission: '' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delegate registry',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOpenArchiveAlert = (registry: Registry) => {
+    setSelectedRegistry(registry);
+    setIsArchiveAlertOpen(true);
+  };
+
+  const handleArchiveRegistry = async () => {
+    if (!selectedRegistry) return;
+    try {
+      // API call for archive will be added here later
+      console.log('Archiving registry:', selectedRegistry.id);
+      toast({
+        title: 'Success',
+        description: 'Registry archived successfully',
+      });
+      setIsArchiveAlertOpen(false);
+      setSelectedRegistry(null);
+      // Potentially refresh registries list here by filtering out the archived one
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to archive registry',
         variant: 'destructive',
       });
     }
@@ -127,9 +261,30 @@ export function NamespaceDetailsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {registries.map((registry) => (
           <Card key={registry.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle>{registry.name}</CardTitle>
-              <CardDescription>{registry.description}</CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle>{registry.name}</CardTitle>
+                <CardDescription>{registry.description}</CardDescription>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="ml-auto">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleOpenUpdateModal(registry)}>
+                    Update
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleOpenDelegateModal(registry)}>
+                    Delegate
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleOpenArchiveAlert(registry)} className="text-red-600 focus:text-red-600 focus:bg-red-50">
+                    Archive
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -148,34 +303,38 @@ export function NamespaceDetailsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Name</label>
+              <Label htmlFor="create-name">Name</Label>
               <Input
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="create-name"
+                value={createFormData.name}
+                onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
                 placeholder="Enter registry name"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
+              <Label htmlFor="create-description">Description</Label>
               <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                id="create-description"
+                value={createFormData.description}
+                onChange={(e) => setCreateFormData({ ...createFormData, description: e.target.value })}
                 placeholder="Enter registry description"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Schema</label>
+              <Label htmlFor="create-schema">Schema</Label>
               <Textarea
-                value={formData.schema}
-                onChange={(e) => setFormData({ ...formData, schema: e.target.value })}
+                id="create-schema"
+                value={createFormData.schema}
+                onChange={(e) => setCreateFormData({ ...createFormData, schema: e.target.value })}
                 placeholder="Enter schema in JSON format"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Metadata</label>
+              <Label htmlFor="create-metadata">Metadata</Label>
               <Textarea
-                value={formData.metadata}
-                onChange={(e) => setFormData({ ...formData, metadata: e.target.value })}
+                id="create-metadata"
+                value={createFormData.metadata}
+                onChange={(e) => setCreateFormData({ ...createFormData, metadata: e.target.value })}
                 placeholder="Enter metadata in JSON format"
               />
             </div>
@@ -186,6 +345,112 @@ export function NamespaceDetailsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Update Registry Modal */}
+      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Registry</DialogTitle>
+            {selectedRegistry && <DialogDescription>Updating {selectedRegistry.name}</DialogDescription>}
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="update-name">Name</Label>
+              <Input
+                id="update-name"
+                value={updateFormData.name}
+                onChange={(e) => setUpdateFormData({ ...updateFormData, name: e.target.value })}
+                placeholder="Enter registry name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-description">Description</Label>
+              <Textarea
+                id="update-description"
+                value={updateFormData.description}
+                onChange={(e) => setUpdateFormData({ ...updateFormData, description: e.target.value })}
+                placeholder="Enter registry description"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-schema">Schema</Label>
+              <Textarea
+                id="update-schema"
+                value={updateFormData.schema}
+                onChange={(e) => setUpdateFormData({ ...updateFormData, schema: e.target.value })}
+                placeholder="Enter schema in JSON format"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="update-metadata">Metadata</Label>
+              <Textarea
+                id="update-metadata"
+                value={updateFormData.metadata}
+                onChange={(e) => setUpdateFormData({ ...updateFormData, metadata: e.target.value })}
+                placeholder="Enter metadata in JSON format"
+              />
+            </div>
+            <Button className="w-full" onClick={handleUpdateRegistry}>
+              Update Registry
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delegate Registry Modal */}
+      <Dialog open={isDelegateModalOpen} onOpenChange={setIsDelegateModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delegate Registry Access</DialogTitle>
+            {selectedRegistry && <DialogDescription>For registry: {selectedRegistry.name}</DialogDescription>}
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="delegate-email">Email</Label>
+              <Input
+                id="delegate-email"
+                type="email"
+                value={delegateFormData.email}
+                onChange={(e) => setDelegateFormData({ ...delegateFormData, email: e.target.value })}
+                placeholder="Enter user's email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="delegate-permission">Permission</Label>
+              <Input
+                id="delegate-permission"
+                value={delegateFormData.permission}
+                onChange={(e) => setDelegateFormData({ ...delegateFormData, permission: e.target.value })}
+                placeholder="e.g., read, write, admin"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDelegateModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleDelegateRegistry}>Delegate</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Archive Registry Alert Dialog */}
+      <AlertDialog open={isArchiveAlertOpen} onOpenChange={setIsArchiveAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to archive this registry?</AlertDialogTitle>
+            {selectedRegistry && (
+              <AlertDialogDescription>
+                This action will archive the registry "{selectedRegistry.name}". You may be able to unarchive it later, but it will be hidden from normal view. 
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedRegistry(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveRegistry} className="bg-red-600 hover:bg-red-700">
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Bulk Upload Modal */}
       <Dialog open={isBulkUploadModalOpen} onOpenChange={setIsBulkUploadModalOpen}>
         <DialogContent>
@@ -194,8 +459,9 @@ export function NamespaceDetailsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Select Files</label>
+              <Label htmlFor="bulk-upload-files">Select Files</Label>
               <Input
+                id="bulk-upload-files"
                 type="file"
                 multiple
                 onChange={(e) => setSelectedFiles(e.target.files)}
