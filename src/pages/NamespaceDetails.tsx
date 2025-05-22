@@ -32,6 +32,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 
 const mockRegistries = [
   {
@@ -233,8 +239,17 @@ export function NamespaceDetailsPage() {
     navigate(`/registries/${registryId}/records`);
   };
 
+  const placeholderNamespaceName = 'Namespace Name'; // e.g., fetched or from props
+
   return (
     <div className="container mx-auto px-4 py-12">
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbPage>{placeholderNamespaceName}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Your Registries</h1>
         <p className="text-muted-foreground mt-2">
