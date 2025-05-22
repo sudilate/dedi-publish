@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Menu, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 export function Header() {
   const { isAuthenticated, logout, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -41,6 +42,8 @@ export function Header() {
     if (!user) return 'U';
     return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
   };
+
+  const showAuthButtons = !isAuthenticated && location.pathname === '/';
 
   return (
     <header
@@ -80,7 +83,7 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
-          ) : (
+          ) : showAuthButtons ? (
             <div className="flex items-center gap-4">
               <Button 
                 variant="outline" 
@@ -92,7 +95,7 @@ export function Header() {
                 Sign up
               </Button>
             </div>
-          )}
+          ) : null}
         </nav>
 
         {/* Mobile menu */}
@@ -133,7 +136,7 @@ export function Header() {
                     Logout
                   </Button>
                 </>
-              ) : (
+              ) : showAuthButtons ? (
                 <div className="flex flex-col gap-4 mt-4">
                   <Button 
                     onClick={() => navigate('/login')}
@@ -144,7 +147,7 @@ export function Header() {
                     Sign up
                   </Button>
                 </div>
-              )}
+              ) : null}
             </nav>
           </SheetContent>
         </Sheet>
