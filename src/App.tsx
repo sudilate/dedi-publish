@@ -8,6 +8,8 @@ import { LoginPage } from '@/pages/Login';
 import { SignupPage } from '@/pages/Signup';
 import { DashboardPage } from '@/pages/Dashboard';
 import { NamespaceDetailsPage } from '@/pages/NamespaceDetails';
+import { RecordsPage } from '@/pages/Records';
+import { RecordDetailsPage } from '@/pages/RecordDetails';
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/namespaces/:namespaceId" element={<NamespaceDetailsPage />} />
+            <Route path="/registries/:registryId/records" element={<RecordsPage />} />
+            <Route path="/registries/:registryId/records/:recordId" element={<RecordDetailsPage />} />
           </Routes>
         </MainLayout>
       </Router>

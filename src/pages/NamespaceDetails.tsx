@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Upload, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,10 +32,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { useToast } from '@/hooks/use-toast';
 
 const mockRegistries = [
   {
@@ -75,6 +75,7 @@ interface DelegateFormData {
 
 export function NamespaceDetailsPage() {
   const { namespaceId } = useParams();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [registries, setRegistries] = useState<Registry[]>(mockRegistries);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -228,6 +229,10 @@ export function NamespaceDetailsPage() {
     }
   };
 
+  const handleRegistryClick = (registryId: number) => {
+    navigate(`/registries/${registryId}/records`);
+  };
+
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-8">
@@ -250,19 +255,23 @@ export function NamespaceDetailsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {registries.map((registry) => (
-          <Card key={registry.id} className="hover:shadow-lg transition-shadow">
+          <Card 
+            key={registry.id} 
+            className="hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => handleRegistryClick(registry.id)}
+          >
             <CardHeader className="flex flex-row items-start justify-between">
               <div>
                 <CardTitle>{registry.name}</CardTitle>
                 <CardDescription>{registry.description}</CardDescription>
               </div>
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" className="ml-auto">
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenuItem onClick={() => handleOpenUpdateModal(registry)}>
                     Update
                   </DropdownMenuItem>
