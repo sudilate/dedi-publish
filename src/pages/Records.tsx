@@ -22,6 +22,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from '@/hooks/use-toast';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Link } from 'react-router-dom';
 
 // Mock data for records - will be replaced with API data later
 const mockRecords = [
@@ -139,8 +148,44 @@ export function RecordsPage() {
     }
   };
 
+  const placeholderNamespaceId = 'your-namespace-id'; // e.g., from useParams()
+  const placeholderNamespaceName = 'Namespace Name'; // e.g., fetched or from props
+  const placeholderRegistryId = 'your-registry-id'; // e.g., from useParams()
+  const placeholderRegistryName = 'Registry Name'; // e.g., fetched or from props
+  const placeholderRecordName = 'Record Name'; // e.g., fetched or from props
+
+  const { recordId } = useParams<{ recordId?: string }>();
+  const isViewingSpecificRecord = !!recordId;
+
   return (
     <div className="container mx-auto px-4 py-12">
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to={`/namespaces/${placeholderNamespaceId}`}>{placeholderNamespaceName}</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            {isViewingSpecificRecord ? (
+              <BreadcrumbLink asChild>
+                <Link to={`/namespaces/${placeholderNamespaceId}/registries/${placeholderRegistryId}/records`}>{placeholderRegistryName}</Link>
+              </BreadcrumbLink>
+            ) : (
+              <BreadcrumbPage>{placeholderRegistryName}</BreadcrumbPage>
+            )}
+          </BreadcrumbItem>
+          {isViewingSpecificRecord && (
+            <>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{placeholderRecordName}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          )}
+        </BreadcrumbList>
+      </Breadcrumb>
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Your Records</h1>
         <p className="text-muted-foreground mt-2">
@@ -337,8 +382,15 @@ export function RecordsPage() {
             <DialogTitle>Subscribers</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="flex gap-4">
-              <Input placeholder="Search subscribers" icon={<Search className="h-4 w-4" />} />
+            <div className="flex gap-4 items-center">
+              <div className="flex flex-grow items-center space-x-2 p-2 border rounded-md">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input 
+                  type="text" 
+                  placeholder="Search subscribers" 
+                  className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-grow p-0 h-auto"
+                />
+              </div>
               <Button>
                 <Key className="mr-2 h-4 w-4" />
                 New Key

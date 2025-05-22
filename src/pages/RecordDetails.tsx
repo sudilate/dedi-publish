@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -22,6 +22,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 // Mock data for record details - will be replaced with API data later
 const mockRecordDetails = {
@@ -37,7 +45,9 @@ const mockRecordDetails = {
 };
 
 export function RecordDetailsPage() {
-  const { recordId } = useParams();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { namespaceId, registryId, recordId } = useParams<{ namespaceId?: string; registryId?: string; recordId?: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isArchiveAlertOpen, setIsArchiveAlertOpen] = useState(false);
@@ -116,8 +126,35 @@ export function RecordDetailsPage() {
     }
   };
 
+  // TODO: Replace these with actual names fetched based on IDs
+  const placeholderNamespaceName = 'Namespace Name';
+  const placeholderRegistryName = 'Registry Name';
+  // recordName will come from the fetched record data, e.g., record?.name
+
   return (
     <div className="container mx-auto px-4 py-12">
+      <Breadcrumb className="mb-6">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            {/* Navigates 2 steps back in history. Assumes Namespace page is 2 steps back. */}
+            <BreadcrumbLink onClick={() => navigate(-2)} style={{ cursor: 'pointer' }}>
+              {placeholderNamespaceName}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            {/* Navigates 1 step back in history. Assumes Registry's records list is 1 step back. */}
+            <BreadcrumbLink onClick={() => navigate(-1)} style={{ cursor: 'pointer' }}>
+              {placeholderRegistryName}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{mockRecordDetails.name}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Entry</h1>
       </div>
