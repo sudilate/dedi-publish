@@ -243,11 +243,11 @@ export function NamespaceDetailsPage() {
       </div>
 
       <div className="flex justify-start gap-4 mb-8">
-        <Button onClick={() => setIsCreateModalOpen(true)}>
+        <Button onClick={() => setIsCreateModalOpen(true)} className="px-8 py-6 text-lg">
           <Plus className="mr-2 h-4 w-4" />
           Create Registry
         </Button>
-        <Button variant="outline" onClick={() => setIsBulkUploadModalOpen(true)}>
+        <Button variant="outline" onClick={() => setIsBulkUploadModalOpen(true)} className="px-8 py-6 text-lg">
           <Upload className="mr-2 h-4 w-4" />
           Bulk Upload
         </Button>
