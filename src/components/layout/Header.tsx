@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Menu, Settings, LogOut, User } from 'lucide-react';
+import { Menu, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,7 +51,7 @@ export function Header() {
         "fixed top-0 w-full py-4 z-50 transition-all duration-300",
         isScrolled
           ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm shadow-sm"
-          : "bg-transparent"
+          : "bg-transparent border-b border-slate-200/60 dark:border-slate-700/60"
       )}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
@@ -67,7 +67,7 @@ export function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback>{getInitials()}</AvatarFallback>
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">{getInitials()}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -111,8 +111,8 @@ export function Header() {
               {isAuthenticated ? (
                 <>
                   <div className="flex items-center gap-3 mb-4">
-                    <Avatar>
-                      <AvatarFallback>{getInitials()}</AvatarFallback>
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">{getInitials()}</AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="font-medium">{user?.firstName} {user?.lastName}</p>

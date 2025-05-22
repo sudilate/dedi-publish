@@ -12,6 +12,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Mock data for record details - will be replaced with API data later
 const mockRecordDetails = {
@@ -30,6 +40,8 @@ export function RecordDetailsPage() {
   const { recordId } = useParams();
   const { toast } = useToast();
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isArchiveAlertOpen, setIsArchiveAlertOpen] = useState(false);
+  const [isRevokeAlertOpen, setIsRevokeAlertOpen] = useState(false);
   const [updateForm, setUpdateForm] = useState({
     name: mockRecordDetails.name,
     description: mockRecordDetails.description,
@@ -54,6 +66,56 @@ export function RecordDetailsPage() {
     }
   };
 
+  // Handler to open the archive alert
+  const handleOpenArchiveAlert = () => {
+    setIsArchiveAlertOpen(true);
+  };
+
+  // Handler for the archive action
+  const handleArchiveRecord = async () => {
+    try {
+      // In a real app, you'd make an API call here
+      console.log('Archiving record:', mockRecordDetails.id);
+      toast({
+        title: 'Success',
+        description: `Record "${mockRecordDetails.name}" archived successfully.`,
+      });
+      setIsArchiveAlertOpen(false);
+      // Optionally, navigate away or update UI to reflect archived state
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to archive record.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Handler to open the revoke alert
+  const handleOpenRevokeAlert = () => {
+    setIsRevokeAlertOpen(true);
+  };
+
+  // Handler for the revoke action
+  const handleRevokeRecord = async () => {
+    try {
+      // In a real app, you'd make an API call here
+      console.log('Revoking record:', mockRecordDetails.id);
+      toast({
+        title: 'Success',
+        description: `Record "${mockRecordDetails.name}" revoked successfully.`,
+      });
+      setIsRevokeAlertOpen(false);
+      // Optionally, navigate away or update UI to reflect revoked state
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to revoke record.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-8">
@@ -70,12 +132,14 @@ export function RecordDetailsPage() {
         <Button 
           variant="outline" 
           className="px-8 py-6 text-lg text-red-600 hover:text-red-600 hover:bg-red-50"
+          onClick={handleOpenRevokeAlert}
         >
           Revoke
         </Button>
         <Button 
           variant="outline" 
           className="px-8 py-6 text-lg text-red-600 hover:text-red-600 hover:bg-red-50"
+          onClick={handleOpenArchiveAlert}
         >
           Archive
         </Button>
@@ -154,6 +218,42 @@ export function RecordDetailsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isArchiveAlertOpen} onOpenChange={setIsArchiveAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to archive this record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will archive the record "{mockRecordDetails.name}". 
+              You may be able to restore it later, but it will be hidden from normal view.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsArchiveAlertOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveRecord} className="bg-red-600 hover:bg-red-700">
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isRevokeAlertOpen} onOpenChange={setIsRevokeAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to revoke this record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will revoke the record "{mockRecordDetails.name}". 
+              You may be able to reintstate it later, but it will be hidden from normal view.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsRevokeAlertOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevokeRecord} className="bg-red-600 hover:bg-red-700">
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
