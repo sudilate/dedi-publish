@@ -33,7 +33,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
 
-// Mock data for registries - will be replaced with API data later
 const mockRegistries = [
   {
     id: 1,
@@ -103,13 +102,11 @@ export function NamespaceDetailsPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
 
   useEffect(() => {
-    // Fetch registries for the namespace - will be implemented later
     console.log('Fetching registries for namespace:', namespaceId);
   }, [namespaceId]);
 
   const handleCreateRegistry = async () => {
     try {
-      // API call will be added here later
       console.log('Creating registry:', createFormData);
       toast({
         title: 'Success',
@@ -117,7 +114,6 @@ export function NamespaceDetailsPage() {
       });
       setIsCreateModalOpen(false);
       setCreateFormData({ name: '', description: '', schema: '', metadata: '' });
-      // Potentially refresh registries list here
     } catch (error) {
       toast({
         title: 'Error',
@@ -141,7 +137,6 @@ export function NamespaceDetailsPage() {
   const handleUpdateRegistry = async () => {
     if (!selectedRegistry) return;
     try {
-      // API call for update will be added here later
       console.log('Updating registry:', selectedRegistry.id, updateFormData);
       toast({
         title: 'Success',
@@ -149,7 +144,6 @@ export function NamespaceDetailsPage() {
       });
       setIsUpdateModalOpen(false);
       setSelectedRegistry(null);
-      // Potentially refresh registries list here
     } catch (error) {
       toast({
         title: 'Error',
@@ -167,7 +161,6 @@ export function NamespaceDetailsPage() {
   const handleDelegateRegistry = async () => {
     if (!selectedRegistry) return;
     try {
-      // API call for delegate will be added here later
       console.log('Delegating registry:', selectedRegistry.id, delegateFormData);
       toast({
         title: 'Success',
@@ -193,7 +186,6 @@ export function NamespaceDetailsPage() {
   const handleArchiveRegistry = async () => {
     if (!selectedRegistry) return;
     try {
-      // API call for archive will be added here later
       console.log('Archiving registry:', selectedRegistry.id);
       toast({
         title: 'Success',
@@ -201,7 +193,6 @@ export function NamespaceDetailsPage() {
       });
       setIsArchiveAlertOpen(false);
       setSelectedRegistry(null);
-      // Potentially refresh registries list here by filtering out the archived one
     } catch (error) {
       toast({
         title: 'Error',
@@ -222,7 +213,6 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      // API call will be added here later
       toast({
         title: 'Success',
         description: 'Files uploaded successfully',
@@ -240,7 +230,7 @@ export function NamespaceDetailsPage() {
 
   return (
     <div className="container mx-auto px-4 py-12">
-      <div className="text-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Your Registries</h1>
         <p className="text-muted-foreground mt-2">
           Manage and organize your registries in this namespace
@@ -295,7 +285,6 @@ export function NamespaceDetailsPage() {
         ))}
       </div>
 
-      {/* Create Registry Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -345,7 +334,6 @@ export function NamespaceDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Update Registry Modal */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -396,7 +384,6 @@ export function NamespaceDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delegate Registry Modal */}
       <Dialog open={isDelegateModalOpen} onOpenChange={setIsDelegateModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -431,7 +418,6 @@ export function NamespaceDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Archive Registry Alert Dialog */}
       <AlertDialog open={isArchiveAlertOpen} onOpenChange={setIsArchiveAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -451,7 +437,6 @@ export function NamespaceDetailsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Upload Modal */}
       <Dialog open={isBulkUploadModalOpen} onOpenChange={setIsBulkUploadModalOpen}>
         <DialogContent>
           <DialogHeader>
