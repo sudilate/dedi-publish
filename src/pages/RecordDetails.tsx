@@ -1,6 +1,17 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from '@/hooks/use-toast';
 
 // Mock data for record details - will be replaced with API data later
 const mockRecordDetails = {
@@ -9,11 +20,39 @@ const mockRecordDetails = {
   city: 'New York',
   job: 'Software Engineer',
   version: '1.0.0',
+  description: 'Senior Software Engineer',
+  details: 'Experienced in full-stack development',
+  metadata: '{"experience": "10 years"}',
   additionalInfo: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 };
 
 export function RecordDetailsPage() {
   const { recordId } = useParams();
+  const { toast } = useToast();
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [updateForm, setUpdateForm] = useState({
+    name: mockRecordDetails.name,
+    description: mockRecordDetails.description,
+    details: mockRecordDetails.details,
+    metadata: mockRecordDetails.metadata,
+  });
+
+  const handleUpdate = async () => {
+    try {
+      // API call will be added here later
+      toast({
+        title: 'Success',
+        description: 'Record updated successfully',
+      });
+      setIsUpdateModalOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update record',
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-12">
@@ -22,9 +61,24 @@ export function RecordDetailsPage() {
       </div>
 
       <div className="flex gap-4 mb-8">
-        <Button onClick={() => {}}>Update</Button>
-        <Button variant="outline" onClick={() => {}}>Revoke</Button>
-        <Button variant="outline" onClick={() => {}}>Archive</Button>
+        <Button 
+          className="px-8 py-6 text-lg" 
+          onClick={() => setIsUpdateModalOpen(true)}
+        >
+          Update
+        </Button>
+        <Button 
+          variant="outline" 
+          className="px-8 py-6 text-lg text-red-600 hover:text-red-600 hover:bg-red-50"
+        >
+          Revoke
+        </Button>
+        <Button 
+          variant="outline" 
+          className="px-8 py-6 text-lg text-red-600 hover:text-red-600 hover:bg-red-50"
+        >
+          Archive
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-8">
@@ -55,6 +109,51 @@ export function RecordDetailsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Record</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                value={updateForm.name}
+                onChange={(e) => setUpdateForm({ ...updateForm, name: e.target.value })}
+                placeholder="Enter name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                value={updateForm.description}
+                onChange={(e) => setUpdateForm({ ...updateForm, description: e.target.value })}
+                placeholder="Enter description"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Details</Label>
+              <Textarea
+                value={updateForm.details}
+                onChange={(e) => setUpdateForm({ ...updateForm, details: e.target.value })}
+                placeholder="Enter details"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Metadata</Label>
+              <Textarea
+                value={updateForm.metadata}
+                onChange={(e) => setUpdateForm({ ...updateForm, metadata: e.target.value })}
+                placeholder="Enter metadata"
+              />
+            </div>
+            <Button className="w-full" onClick={handleUpdate}>
+              Update
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
