@@ -23,7 +23,7 @@ export function SignupPage() {
                 to="/login"
                 className="text-primary font-medium hover:underline"
               >
-                Sign in
+                Sign in here
               </Link>
             </div>
           </CardFooter>

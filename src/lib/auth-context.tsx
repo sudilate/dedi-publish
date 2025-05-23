@@ -1,10 +1,29 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { signupUser, loginUser, SignupRequest, LoginRequest, ApiResponse, User as ApiUser } from './api';
+
+// JWT decoder function
+function decodeJWT(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Error decoding JWT:', error);
+    return null;
+  }
+}
 
 interface User {
+  id?: string;
   username: string;
   firstName: string;
   lastName: string;
   email: string;
+  email_verified?: boolean;
+  realm_roles?: string[];
 }
 
 interface AuthContextType {
@@ -19,6 +38,12 @@ interface AuthContextType {
     password: string;
   }) => Promise<boolean>;
   logout: () => void;
+  getAuthTokens: () => {
+    accessToken: string | null;
+    tokenType: string | null;
+    refreshToken: string | null;
+    creatorId: string | null;
+  };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,26 +51,126 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  // This is a mock implementation - replace with actual API calls later
-  const login = async (username: string, password: string): Promise<boolean> => {
-    // In a real implementation, this would call your API
-    // For now, we'll simulate a successful login for any non-empty credentials
-    if (username && password) {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
+  // Initialize user from stored tokens on app load
+  React.useEffect(() => {
+    const initializeAuth = () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (accessToken) {
+        try {
+          const decodedToken = decodeJWT(accessToken);
+          console.log('Initializing user from stored token:', decodedToken);
+          
+          if (decodedToken && decodedToken.exp * 1000 > Date.now()) {
+            // Token is still valid
+            const userObj = {
+              id: decodedToken.sub || 'unknown',
+              username: decodedToken.preferred_username || decodedToken.username || 'user',
+              firstName: decodedToken.given_name || 'User',
+              lastName: decodedToken.family_name || 'Name',
+              email: decodedToken.email || '',
+              email_verified: decodedToken.email_verified || false,
+              realm_roles: decodedToken.realm_access?.roles || [],
+            };
+            setUser(userObj);
+            console.log('User initialized from stored token');
+          } else {
+            // Token expired, clear storage
+            console.log('Stored token expired, clearing storage');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('token_type');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('creator_id');
+          }
+        } catch (error) {
+          console.error('Error initializing from stored token:', error);
+          // Clear corrupted tokens
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('token_type');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('creator_id');
+        }
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  // Login function using actual API
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const credentials: LoginRequest = { email, password };
+      const response = await loginUser(credentials);
       
-      setUser({
-        username,
-        firstName: 'Demo',
-        lastName: 'User',
-        email: `${username}@example.com`,
-      });
-      return true;
+      console.log('Full login API response:', response);
+      console.log('Response message:', response.message);
+      console.log('Response data:', response.data);
+      
+      if (response.message === "Login successful") {
+        const tokenData = response.data as any;
+        
+        // Store authentication tokens in localStorage
+        if (tokenData.access_token) {
+          localStorage.setItem('access_token', tokenData.access_token);
+          localStorage.setItem('token_type', tokenData.token_type || 'Bearer');
+          localStorage.setItem('refresh_token', tokenData.refresh_token || '');
+          
+          if (tokenData.creator_id) {
+            localStorage.setItem('creator_id', tokenData.creator_id);
+          }
+          
+          console.log('Stored tokens in localStorage');
+          
+          // Decode JWT to extract user information
+          const decodedToken = decodeJWT(tokenData.access_token);
+          console.log('Decoded JWT payload:', decodedToken);
+          
+          if (decodedToken) {
+            // Create user object from JWT payload
+            const userObj = {
+              id: decodedToken.sub || 'unknown', // JWT subject
+              username: decodedToken.preferred_username || decodedToken.username || email.split('@')[0],
+              firstName: decodedToken.given_name || 'User',
+              lastName: decodedToken.family_name || 'Name', 
+              email: decodedToken.email || email,
+              email_verified: decodedToken.email_verified || false,
+              realm_roles: decodedToken.realm_access?.roles || [],
+            };
+            
+            console.log('Setting user from JWT data:', userObj);
+            setUser(userObj);
+            return true;
+          }
+        }
+        
+        // Fallback if JWT decoding fails
+        console.log('JWT decoding failed, using fallback user');
+        const fallbackUser = {
+          id: 'temp-id',
+          username: email.split('@')[0],
+          firstName: 'User',
+          lastName: 'Name',
+          email: email,
+          email_verified: false,
+          realm_roles: [],
+        };
+        setUser(fallbackUser);
+        return true;
+      }
+      
+      // Handle error cases
+      const errorMessage = typeof response.data === 'string' 
+        ? response.data 
+        : response.message || 'Login failed';
+      
+      throw new Error(errorMessage);
+      
+    } catch (error) {
+      // Re-throw the error so it can be handled by the UI
+      throw error;
     }
-    return false;
   };
 
-  // Mock signup function - replace with actual API call later
+  // Signup function using actual API - UPDATED to not auto-login
   const signup = async (userData: {
     username: string;
     firstName: string;
@@ -53,24 +178,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string;
     password: string;
   }): Promise<boolean> => {
-    // In a real implementation, this would call your API
-    if (userData.username && userData.password) {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      
-      setUser({
+    try {
+      const signupData: SignupRequest = {
         username: userData.username,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
+        firstname: userData.firstName,
+        lastname: userData.lastName,
         email: userData.email,
-      });
-      return true;
+        password: userData.password,
+      };
+      
+      const response = await signupUser(signupData);
+      
+      if (response.message === "Resource created successfully") {
+        // Signup successful - but DO NOT log in the user automatically
+        // They need to verify email and manually login
+        return true;
+      }
+      
+      // Handle error cases - always show the data value as specified by user
+      const errorMessage = typeof response.data === 'string' 
+        ? response.data 
+        : response.message || 'An error occurred during signup';
+      
+      throw new Error(errorMessage);
+      
+    } catch (error) {
+      // Re-throw the error so it can be handled by the UI
+      throw error;
     }
-    return false;
   };
 
   const logout = () => {
     setUser(null);
+    // Clear all stored authentication data
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token_type');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('creator_id');
+    console.log('User logged out, tokens cleared');
+  };
+
+  const getAuthTokens = () => {
+    return {
+      accessToken: localStorage.getItem('access_token'),
+      tokenType: localStorage.getItem('token_type'),
+      refreshToken: localStorage.getItem('refresh_token'),
+      creatorId: localStorage.getItem('creator_id'),
+    };
   };
 
   return (
@@ -81,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         signup,
         logout,
+        getAuthTokens,
       }}
     >
       {children}
