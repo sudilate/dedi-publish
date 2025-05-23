@@ -29,7 +29,7 @@ export function HomePage() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               <Button size="lg" variant="outline" className="text-lg h-12 px-8" onClick={() => navigate('/login')}>
-                Sign In
+                Login
                 <ArrowUpRight className="ml-2 h-5 w-5" />
               </Button>
             </div>

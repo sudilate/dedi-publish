@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/toaster';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { MainLayout } from '@/components/layout/MainLayout';

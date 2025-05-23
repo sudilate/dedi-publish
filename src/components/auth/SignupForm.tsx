@@ -76,10 +76,29 @@ export function SignupForm() {
 
   async function onSubmit(data: SignupFormValues) {
     setLoading(true);
+    
+    // Show loading toast
+    const loadingToast = toast({
+      title: '⏳ Creating your account...',
+      description: 'Please wait while we set up your account.',
+      duration: Infinity, // Keep it until we dismiss it
+    });
+    
     try {
       const success = await signup(data);
       
       if (success) {
+        // Dismiss loading toast
+        loadingToast.dismiss();
+        
+        // Show success toast - updated message for email verification flow
+        toast({
+          title: '🎉 Account created successfully!',
+          description: 'Please check your email for verification. After verification, login with your credentials.',
+          className: 'border-green-200 bg-green-50 text-green-900',
+          duration: 5000,
+        });
+        
         setIsVerifying(true);
         const interval = setInterval(() => {
           setTimer((prev) => {
@@ -91,16 +110,24 @@ export function SignupForm() {
           });
         }, 1000);
       } else {
+        // Dismiss loading toast
+        loadingToast.dismiss();
+        
         toast({
-          title: 'Signup failed',
+          title: '❌ Signup failed',
           description: 'Something went wrong. Please try again.',
           variant: 'destructive',
         });
       }
     } catch (error) {
+      // Dismiss loading toast
+      loadingToast.dismiss();
+      
+      // Show the API error message to the user
+      const errorMessage = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
       toast({
-        title: 'Signup failed',
-        description: 'Something went wrong. Please try again.',
+        title: '❌ Signup failed',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -206,19 +233,43 @@ export function SignupForm() {
         />
         <div className="mt-6">
           {isVerifying ? (
-            <div className="text-center">
+            <div className="text-center space-y-4">
               {timer > 0 ? (
-                <div className="text-lg font-medium">
-                  Verifying your email... {timer}s
+                <div className="space-y-2">
+                  <div className="text-lg font-medium text-green-700">
+                    ✅ Account created successfully!
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Waiting for email verification... {timer}s
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Please check your email and click the verification link
+                  </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={resendVerification}
-                  className="text-primary hover:underline"
-                >
-                  Didn't receive verification email? Click Here
-                </button>
+                <div className="space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    Email verification time completed.
+                  </div>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={resendVerification}
+                      className="text-primary hover:underline text-sm"
+                    >
+                      Didn't receive verification email? Click here to resend
+                    </button>
+                    <div className="pt-2">
+                      <Button
+                        type="button"
+                        onClick={() => navigate('/login')}
+                        className="w-full"
+                      >
+                        Go to Login Page
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
