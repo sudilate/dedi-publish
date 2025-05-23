@@ -22,8 +22,8 @@ function App() {
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/namespaces/:namespaceId" element={<NamespaceDetailsPage />} />
-            <Route path="/registries/:registryId/records" element={<RecordsPage />} />
-            <Route path="/registries/:registryId/records/:recordId" element={<RecordDetailsPage />} />
+            <Route path="/:namespaceId/:registryName" element={<RecordsPage />} />
+            <Route path="/:namespaceId/:registryName/:recordName" element={<RecordDetailsPage />} />
           </Routes>
         </MainLayout>
       </Router>

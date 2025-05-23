@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Archive, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -95,10 +95,20 @@ export function NamespaceDetailsPage() {
   const [registries, setRegistries] = useState<Registry[]>([]);
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [loading, setLoading] = useState(true);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string[]>([]);
+  const [globalUploadStatus, setGlobalUploadStatus] = useState<{
+    isUploading: boolean;
+    message: string;
+    namespaceId: string;
+  } | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
   const [isArchiveAlertOpen, setIsArchiveAlertOpen] = useState(false);
+  const [isRestoreAlertOpen, setIsRestoreAlertOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [selectedRegistry, setSelectedRegistry] = useState<Registry | null>(null);
   const [createFormData, setCreateFormData] = useState<RegistryFormData>({
@@ -118,6 +128,31 @@ export function NamespaceDetailsPage() {
     permission: '',
   });
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Check for ongoing upload on component mount
+  useEffect(() => {
+    const savedUploadStatus = localStorage.getItem('bulkUploadStatus');
+    if (savedUploadStatus) {
+      try {
+        const uploadStatus = JSON.parse(savedUploadStatus);
+        if (uploadStatus.isUploading) {
+          setGlobalUploadStatus(uploadStatus);
+        }
+      } catch (error) {
+        localStorage.removeItem('bulkUploadStatus');
+      }
+    }
+  }, []);
+
+  // Save upload status to localStorage whenever it changes
+  useEffect(() => {
+    if (globalUploadStatus) {
+      localStorage.setItem('bulkUploadStatus', JSON.stringify(globalUploadStatus));
+    } else {
+      localStorage.removeItem('bulkUploadStatus');
+    }
+  }, [globalUploadStatus]);
 
   useEffect(() => {
     if (namespaceId) {
@@ -127,6 +162,7 @@ export function NamespaceDetailsPage() {
 
   const fetchRegistries = async () => {
     try {
+      console.log('🔄 Fetching registries...');
       setLoading(true);
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
@@ -137,6 +173,7 @@ export function NamespaceDetailsPage() {
       });
 
       const result: NamespaceQueryResponse = await response.json();
+      console.log('📊 Registries API response:', result);
       
       if (result.message === "Resource retrieved successfully") {
         // Group registries by registry_id and keep only the latest version of each
@@ -166,7 +203,9 @@ export function NamespaceDetailsPage() {
         
         setRegistries(uniqueRegistries);
         setNamespaceName(result.data.namespace_name);
+        console.log('✅ Registries updated:', uniqueRegistries.length, 'registries');
       } else {
+        console.error('❌ Failed to fetch registries:', result.message);
         toast({
           title: 'Error',
           description: result.message || 'Failed to fetch registries',
@@ -174,7 +213,7 @@ export function NamespaceDetailsPage() {
         });
       }
     } catch (error) {
-      console.error('Error fetching registries:', error);
+      console.error('❌ Error fetching registries:', error);
       toast({
         title: 'Error',
         description: 'Failed to fetch registries. Please try again.',
@@ -185,8 +224,65 @@ export function NamespaceDetailsPage() {
     }
   };
 
-  const handleCreateRegistry = async () => {
+  // Separate function for refreshing registries without affecting main loading state
+  const refreshRegistries = async () => {
     try {
+      console.log('🔄 Refreshing registries (silent)...');
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result: NamespaceQueryResponse = await response.json();
+      console.log('📊 Silent refresh API response:', result);
+      
+      if (result.message === "Resource retrieved successfully") {
+        // Group registries by registry_id and keep only the latest version of each
+        const registryMap = new Map<string, Registry>();
+        
+        result.data.registries.forEach(registry => {
+          const existingRegistry = registryMap.get(registry.registry_id);
+          
+          if (!existingRegistry) {
+            registryMap.set(registry.registry_id, registry);
+          } else {
+            const existingDate = new Date(existingRegistry.updated_at).getTime();
+            const currentDate = new Date(registry.updated_at).getTime();
+            
+            if (currentDate > existingDate) {
+              registryMap.set(registry.registry_id, registry);
+            }
+          }
+        });
+        
+        // Convert map back to array and sort by updated_at in descending order
+        const uniqueRegistries = Array.from(registryMap.values()).sort((a, b) => 
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+        
+        setRegistries(uniqueRegistries);
+        setNamespaceName(result.data.namespace_name);
+        console.log('✅ Registries silently refreshed:', uniqueRegistries.length, 'registries');
+        return true;
+      } else {
+        console.error('❌ Failed to refresh registries:', result.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing registries:', error);
+      return false;
+    }
+  };
+
+  const handleCreateRegistry = async () => {
+    if (createLoading) return; // Prevent multiple submissions
+    
+    try {
+      setCreateLoading(true);
+      
       // Validate required fields
       if (!createFormData.name.trim()) {
         toast({
@@ -280,7 +376,7 @@ export function NamespaceDetailsPage() {
         setIsCreateModalOpen(false);
         setCreateFormData({ name: '', description: '', schema: '', metadata: '' });
         // Refresh the registries list
-        await fetchRegistries();
+        await refreshRegistries();
       } else {
         toast({
           title: 'Error',
@@ -295,6 +391,8 @@ export function NamespaceDetailsPage() {
         description: 'Failed to create registry. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -324,9 +422,11 @@ export function NamespaceDetailsPage() {
   };
 
   const handleUpdateRegistry = async () => {
-    if (!selectedRegistry) return;
+    if (!selectedRegistry || updateLoading) return;
     
     try {
+      setUpdateLoading(true);
+      
       // Validate required fields
       if (!updateFormData.name.trim()) {
         toast({
@@ -396,7 +496,7 @@ export function NamespaceDetailsPage() {
         setIsUpdateModalOpen(false);
         setSelectedRegistry(null);
         // Refresh the registries list
-        await fetchRegistries();
+        await refreshRegistries();
       } else {
         toast({
           title: 'Error',
@@ -411,6 +511,8 @@ export function NamespaceDetailsPage() {
         description: 'Failed to update registry. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setUpdateLoading(false);
     }
   };
 
@@ -446,24 +548,122 @@ export function NamespaceDetailsPage() {
 
   const handleArchiveRegistry = async () => {
     if (!selectedRegistry) return;
+    setActionLoading(true);
     try {
-      console.log('Archiving registry:', selectedRegistry.registry_id);
-      toast({
-        title: 'Success',
-        description: 'Registry archived successfully',
+      const { accessToken } = getAuthTokens();
+      if (!accessToken) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in to archive the registry',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/archive-registry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({}), 
       });
-      setIsArchiveAlertOpen(false);
-      setSelectedRegistry(null);
+
+      const result = await response.json();
+
+      if (response.ok && result.message === "Registry archived successfully") {
+        toast({
+          title: 'Success!',
+          description: `Registry "${selectedRegistry.registry_name}" archived successfully.`,
+          // Ensure default variant (not destructive) for success
+        });
+        await refreshRegistries();
+      } else {
+        toast({
+          title: 'Archive Error', // More specific title
+          description: result.message || 'Failed to archive registry',
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
+      console.error('Error archiving registry:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to archive registry',
+        title: 'Archive Error',
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsArchiveAlertOpen(false);
+      setSelectedRegistry(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenRestoreAlert = (registry: Registry) => {
+    setSelectedRegistry(registry);
+    setIsRestoreAlertOpen(true);
+  };
+
+  const handleRestoreRegistry = async () => {
+    if (!selectedRegistry) return;
+    setActionLoading(true);
+    try {
+      const { accessToken } = getAuthTokens();
+      if (!accessToken) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in to restore the registry',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/restore-registry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.message === "Registry restored successfully") {
+        toast({
+          title: 'Success!',
+          description: `Registry "${selectedRegistry.registry_name}" restored successfully.`,
+           // Ensure default variant (not destructive) for success
+        });
+        await refreshRegistries();
+      } else {
+        // Handle specific 500 error from server or other non-ok responses
+        const errorMessage = result.message || (response.status === 500 ? 'Internal Server Error' : 'Failed to restore registry');
+        toast({
+          title: 'Restore Error', // More specific title
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error restoring registry:', error);
+      toast({
+        title: 'Restore Error',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRestoreAlertOpen(false);
+      setSelectedRegistry(null);
+      setActionLoading(false);
     }
   };
 
   const handleBulkUpload = async () => {
+    if (uploadLoading) return; // Prevent multiple submissions
+    
     try {
       if (!selectedFiles?.length) {
         toast({
@@ -474,23 +674,252 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      toast({
-        title: 'Success',
-        description: 'Files uploaded successfully',
+      // Get auth tokens
+      const { accessToken } = getAuthTokens();
+      if (!accessToken) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in to upload files',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setUploadLoading(true);
+      setUploadProgress(['Starting upload...']);
+      
+      // Set global upload status
+      setGlobalUploadStatus({
+        isUploading: true,
+        message: `Uploading ${selectedFiles.length} file(s)...`,
+        namespaceId: namespaceId || ''
       });
-      setIsBulkUploadModalOpen(false);
-      setSelectedFiles(null);
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('namespace', namespaceId || '');
+      
+      // Add all selected files
+      Array.from(selectedFiles).forEach((file) => {
+        formData.append('file', file);
+      });
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const response = await fetch(`${API_BASE_URL}/dedi/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          // Don't set Content-Type for FormData, browser will set it with boundary
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      console.log('Upload response:', response);
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        try {
+          // Process streaming response line by line as it arrives
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.trim()) {
+                try {
+                  const data = JSON.parse(line.trim());
+                  console.log('Upload stream data:', data);
+                  
+                  if (data.message) {
+                    // Update progress in real-time (for modal log)
+                    setUploadProgress(prev => [...prev, data.message]);
+                    
+                    // Check for completion FIRST
+                    if (data.status === 'success' && data.message === 'Bulk upload complete') {
+                      console.log('✅ Upload completed! Processing completion...');
+                      
+                      setGlobalUploadStatus(null); // Clear global progress notification
+                      
+                      toast({
+                        title: '🎉 Upload Complete',
+                        description: 'All files have been uploaded successfully!',
+                        duration: 5000,
+                        className: 'border-green-200 bg-green-50 text-green-900',
+                      });
+                      
+                      setTimeout(async () => {
+                        try {
+                          console.log('🔄 Refreshing registries...');
+                          await refreshRegistries();
+                          console.log('✅ Registries refreshed successfully');
+                        } catch (error) {
+                          console.error('❌ Failed to refresh registries:', error);
+                          toast({
+                            title: 'Warning',
+                            description: 'Upload completed but failed to refresh list. Please refresh manually.',
+                            variant: 'destructive',
+                          });
+                        }
+                      }, 1000);
+                      
+                      setTimeout(() => {
+                        setIsBulkUploadModalOpen(false);
+                        setSelectedFiles(null);
+                      }, 3000);
+                      
+                      // reader.releaseLock() will be handled by the finally block
+                      return; // Exit handleBulkUpload function as upload is fully complete
+                    }
+                    
+                    // Check for errors SECOND
+                    if (data.status === 'error' || 
+                        data.message.toLowerCase().includes('error') || 
+                        data.message.toLowerCase().includes('failed')) {
+                      console.log('❌ Upload error detected:', data.message);
+                      setGlobalUploadStatus(null);
+                      toast({
+                        title: 'Upload Error',
+                        description: data.message,
+                        variant: 'destructive',
+                        duration: 7000,
+                      });
+                      // reader.releaseLock() will be handled by the finally block
+                      return; // Exit handleBulkUpload function on error
+                    }
+
+                    // If not complete and not an error, and still uploading, update global notification message
+                    if (data.status === 'success' && globalUploadStatus?.isUploading) {
+                      setGlobalUploadStatus(prevStatus => prevStatus ? ({
+                        ...prevStatus,
+                        message: data.message, // Dynamically update progress message
+                      }) : null);
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse line:', line);
+                }
+              }
+            }
+          }
+          
+          // Process any remaining buffer after stream ends
+          if (buffer.trim()) {
+            try {
+              const data = JSON.parse(buffer.trim());
+              console.log('Upload stream data (final):', data);
+              
+              if (data.message) {
+                setUploadProgress(prev => [...prev, data.message]);
+                
+                // Check for completion FIRST (also in final buffer)
+                if (data.status === 'success' && data.message === 'Bulk upload complete') {
+                  console.log('✅ Upload completed (final buffer)! Processing completion...');
+                  
+                  setGlobalUploadStatus(null);
+                  toast({
+                    title: '🎉 Upload Complete',
+                    description: 'All files have been uploaded successfully!',
+                    duration: 5000,
+                    className: 'border-green-200 bg-green-50 text-green-900',
+                  });
+                  
+                  setTimeout(async () => {
+                    try {
+                      console.log('🔄 Refreshing registries...');
+                      await refreshRegistries();
+                      console.log('✅ Registries refreshed successfully');
+                    } catch (error) {
+                      console.error('❌ Failed to refresh registries:', error);
+                      toast({
+                        title: 'Warning',
+                        description: 'Upload completed but failed to refresh list. Please refresh manually.',
+                        variant: 'destructive',
+                      });
+                    }
+                  }, 1000);
+                  
+                  setTimeout(() => {
+                    setIsBulkUploadModalOpen(false);
+                    setSelectedFiles(null);
+                  }, 3000);
+                  // reader.releaseLock() will be handled by the finally block
+                  return; // Exit handleBulkUpload
+                }
+
+                // Check for errors SECOND (also in final buffer)
+                if (data.status === 'error' ||
+                    data.message.toLowerCase().includes('error') ||
+                    data.message.toLowerCase().includes('failed')) {
+                    console.log('❌ Upload error detected (final buffer):', data.message);
+                    setGlobalUploadStatus(null);
+                    toast({
+                        title: 'Upload Error',
+                        description: data.message,
+                        variant: 'destructive',
+                        duration: 7000,
+                    });
+                    // reader.releaseLock() will be handled by the finally block
+                    return; // Exit handleBulkUpload on error
+                }
+                
+                // If not complete and not an error, and still uploading, update global notification message
+                if (data.status === 'success' && globalUploadStatus?.isUploading) {
+                  setGlobalUploadStatus(prevStatus => prevStatus ? ({
+                    ...prevStatus,
+                    message: data.message, // Dynamically update progress message
+                  }) : null);
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to parse final buffer:', buffer);
+            }
+          }
+          
+        } finally {
+          reader.releaseLock();
+        }
+      }
+
+      // If we reach here, the stream ended without explicit completion
+      console.log('⚠️ Stream ended without completion message');
+      setGlobalUploadStatus(null);
+      
     } catch (error) {
+      console.error('Error uploading files:', error);
+      setGlobalUploadStatus(null); // Clear global status on error
       toast({
         title: 'Error',
-        description: 'Failed to upload files',
+        description: 'Failed to upload files. Please try again.',
         variant: 'destructive',
+        duration: 7000,
       });
+      setUploadProgress(prev => [...prev, 'Upload failed. Please try again.']);
+    } finally {
+      setUploadLoading(false);
+      console.log('🔧 Upload process cleanup completed');
+      
+      // Clear local progress after some time if modal is still open
+      setTimeout(() => {
+        if (!uploadLoading) {
+          setUploadProgress([]);
+          console.log('🧹 Upload progress cleared');
+        }
+      }, 10000);
     }
   };
 
-  const handleRegistryClick = (registryId: string) => {
-    navigate(`/registries/${registryId}/records`);
+  const handleRegistryClick = (registry: Registry) => {
+    navigate(`/${namespaceId}/${registry.registry_name}`);
   };
 
   if (loading) {
@@ -508,6 +937,34 @@ export function NamespaceDetailsPage() {
 
   return (
     <div className="container mx-auto px-4 py-12">
+      {/* Global Upload Progress Notification */}
+      {globalUploadStatus?.isUploading && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md shadow-lg max-w-sm">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-blue-800">
+                Bulk Upload in Progress
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                {globalUploadStatus.message}
+              </p>
+              <p className="text-xs text-blue-500 mt-1">
+                You'll be notified when complete
+              </p>
+              <button
+                onClick={() => setGlobalUploadStatus(null)}
+                className="text-xs text-blue-700 hover:text-blue-900 mt-2 underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -546,11 +1003,11 @@ export function NamespaceDetailsPage() {
             <Card 
               key={registry.registry_id} 
               className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleRegistryClick(registry.registry_id)}
+              onClick={() => handleRegistryClick(registry)}
             >
               <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle>{registry.registry_name}</CardTitle>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="truncate">{registry.registry_name}</CardTitle>
                   <CardDescription>{registry.description}</CardDescription>
                 </div>
                 <DropdownMenu>
@@ -567,9 +1024,17 @@ export function NamespaceDetailsPage() {
                       Delegate
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleOpenArchiveAlert(registry)} className="text-red-600 focus:text-red-600 focus:bg-red-50">
-                      Archive
-                    </DropdownMenuItem>
+                    {registry.is_archived ? (
+                      <DropdownMenuItem onClick={() => handleOpenRestoreAlert(registry)} className="text-green-600 focus:text-green-600 focus:bg-green-50">
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Restore
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => handleOpenArchiveAlert(registry)} className="text-red-600 focus:text-red-600 focus:bg-red-50">
+                        <Archive className="mr-2 h-4 w-4" />
+                        Archive
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </CardHeader>
@@ -582,6 +1047,14 @@ export function NamespaceDetailsPage() {
                     Updated: {new Date(registry.updated_at).toLocaleDateString()}
                   </p>
                 </div>
+                {registry.is_archived && (
+                  <div className="mt-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      <Archive className="mr-1 h-3 w-3" />
+                      Archived
+                    </span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -633,8 +1106,15 @@ export function NamespaceDetailsPage() {
                 rows={3}
               />
             </div>
-            <Button className="w-full" onClick={handleCreateRegistry}>
-              Create
+            <Button className="w-full" onClick={handleCreateRegistry} disabled={createLoading}>
+              {createLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creating...
+                </>
+              ) : (
+                'Create'
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -676,8 +1156,15 @@ export function NamespaceDetailsPage() {
                 rows={3}
               />
             </div>
-            <Button className="w-full" onClick={handleUpdateRegistry}>
-              Update Registry
+            <Button className="w-full" onClick={handleUpdateRegistry} disabled={updateLoading}>
+              {updateLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                'Update Registry'
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -728,18 +1215,65 @@ export function NamespaceDetailsPage() {
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setSelectedRegistry(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleArchiveRegistry} className="bg-red-600 hover:bg-red-700">
-              Archive
+            <AlertDialogCancel onClick={() => setSelectedRegistry(null)} disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveRegistry} className="bg-red-600 hover:bg-red-700" disabled={actionLoading}>
+              {actionLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Archiving...
+                </>
+              ) : (
+                'Archive'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={isBulkUploadModalOpen} onOpenChange={setIsBulkUploadModalOpen}>
-        <DialogContent>
+      <AlertDialog open={isRestoreAlertOpen} onOpenChange={setIsRestoreAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to restore this registry?</AlertDialogTitle>
+            {selectedRegistry && (
+              <AlertDialogDescription>
+                This action will restore the registry "{selectedRegistry.registry_name}", making it active again.
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedRegistry(null)} disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRestoreRegistry} className="bg-green-600 hover:bg-green-700" disabled={actionLoading}>
+               {actionLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Restoring...
+                </>
+              ) : (
+                'Restore'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={isBulkUploadModalOpen} onOpenChange={(open) => {
+        // Allow closing the modal even during upload
+        if (!open) {
+          setIsBulkUploadModalOpen(false);
+          if (!uploadLoading) {
+            setUploadProgress([]);
+            setSelectedFiles(null);
+          }
+        } else {
+          setIsBulkUploadModalOpen(true);
+        }
+      }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Bulk Upload</DialogTitle>
+            <DialogDescription>
+              Upload multiple files to create registries in bulk
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -750,11 +1284,62 @@ export function NamespaceDetailsPage() {
                 multiple
                 onChange={(e) => setSelectedFiles(e.target.files)}
                 className="cursor-pointer"
+                disabled={uploadLoading}
               />
+              {selectedFiles && selectedFiles.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {selectedFiles.length} file(s) selected
+                </p>
+              )}
             </div>
-            <Button className="w-full" onClick={handleBulkUpload}>
-              Upload
-            </Button>
+            
+            {uploadProgress.length > 0 && (
+              <div className="space-y-2">
+                <Label>Upload Progress</Label>
+                <div className="max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md text-sm">
+                  {uploadProgress.map((message, index) => (
+                    <div key={index} className="text-gray-700 mb-1">
+                      {message}
+                    </div>
+                  ))}
+                </div>
+                {uploadLoading && (
+                  <p className="text-sm text-blue-600">
+                    ℹ️ You can close this modal and continue working. Upload will continue in the background.
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsBulkUploadModalOpen(false);
+                  if (!uploadLoading) {
+                    setUploadProgress([]);
+                    setSelectedFiles(null);
+                  }
+                }}
+                className="flex-1"
+              >
+                {uploadLoading ? 'Continue Working' : 'Cancel'}
+              </Button>
+              <Button 
+                onClick={handleBulkUpload}
+                disabled={uploadLoading || !selectedFiles?.length}
+                className="flex-1"
+              >
+                {uploadLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Uploading...
+                  </>
+                ) : (
+                  'Upload'
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
