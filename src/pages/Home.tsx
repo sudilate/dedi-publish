@@ -3,9 +3,27 @@ import { ArrowRight, Shield, Users, Zap, CheckCircle2, ArrowUpRight } from 'luci
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/lib/auth-context';
+import React from 'react';
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  if (isAuthenticated) {
+    // Optionally, render a loading state or null while redirecting
+    return (
+      <div className="flex flex-col min-h-screen items-center justify-center">
+        <p>Redirecting to your dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">

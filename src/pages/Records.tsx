@@ -25,6 +25,17 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 
@@ -64,6 +75,22 @@ interface RecordsApiResponse {
   };
 }
 
+// Interface for add record form data
+interface AddRecordFormData {
+  record_name: string;
+  description: string;
+  details: { [key: string]: string };
+  meta: { [key: string]: any };
+}
+
+// Interface for add record API response
+interface AddRecordApiResponse {
+  message: string;
+  data: {
+    record_id: string;
+  };
+}
+
 export function RecordsPage() {
   const { namespaceId, registryName } = useParams();
   const navigate = useNavigate();
@@ -76,6 +103,14 @@ export function RecordsPage() {
   const [registryDisplayName, setRegistryDisplayName] = useState<string>('Loading...');
   const [totalRecords, setTotalRecords] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addFormData, setAddFormData] = useState<AddRecordFormData>({
+    record_name: '',
+    description: '',
+    details: {},
+    meta: {},
+  });
 
   useEffect(() => {
     if (namespaceId && registryName) {
@@ -131,20 +166,126 @@ export function RecordsPage() {
     navigate(`/${namespaceId}/${registryName}/${record.record_name}`);
   };
 
+  const handleOpenAddModal = () => {
+    // Initialize form with empty details based on schema
+    const initialDetails: { [key: string]: string } = {};
+    Object.keys(schema).forEach(field => {
+      initialDetails[field] = '';
+    });
+    
+    setAddFormData({
+      record_name: '',
+      description: '',
+      details: initialDetails,
+      meta: {},
+    });
+    setIsAddModalOpen(true);
+  };
+
   const handleAddRecord = async () => {
+    if (addLoading) return; // Prevent multiple submissions
+    
     try {
-      console.log('Adding new record...');
-      toast({
-        title: 'Success',
-        description: 'Record added successfully',
+      setAddLoading(true);
+      
+      // Validate required fields
+      if (!addFormData.record_name.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Record name is required',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!addFormData.description.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Description is required',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Get auth tokens
+      const { accessToken } = getAuthTokens();
+      if (!accessToken) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in to add records',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const currentNamespaceId = namespaceId || '';
+      const currentRegistryName = registryName || '';
+      
+      console.log('Add Record API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/add-record`);
+      
+      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/add-record`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          record_name: addFormData.record_name.trim(),
+          description: addFormData.description.trim(),
+          details: addFormData.details,
+          meta: addFormData.meta,
+        }),
       });
+
+      const result: AddRecordApiResponse = await response.json();
+      console.log('Add Record API response:', result);
+
+      if (response.ok && result.message === "record created") {
+        toast({
+          title: 'Success',
+          description: 'Record added successfully',
+        });
+        setIsAddModalOpen(false);
+        // Refresh the records list
+        await fetchRecords();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to add record',
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
+      console.error('Error adding record:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add record',
+        description: 'Failed to add record. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setAddLoading(false);
     }
+  };
+
+  const handleDetailsChange = (key: string, value: string) => {
+    setAddFormData(prev => ({
+      ...prev,
+      details: {
+        ...prev.details,
+        [key]: value,
+      },
+    }));
+  };
+
+  const handleMetaChange = (key: string, value: any) => {
+    setAddFormData(prev => ({
+      ...prev,
+      meta: {
+        ...prev.meta,
+        [key]: value,
+      },
+    }));
   };
 
   const handleBulkUpload = async () => {
@@ -212,7 +353,7 @@ export function RecordsPage() {
       </div>
 
       <div className="flex justify-start gap-4 mb-8">
-        <Button onClick={handleAddRecord} className="px-8 py-6 text-lg">
+        <Button onClick={handleOpenAddModal} className="px-8 py-6 text-lg">
           <Plus className="mr-2 h-4 w-4" />
           Add Record
         </Button>
@@ -287,6 +428,152 @@ export function RecordsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Add Record Modal */}
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Record</DialogTitle>
+            <DialogDescription>
+              Create a new record in {registryDisplayName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* Basic Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Basic Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="add-record-name">Record Name *</Label>
+                  <Input
+                    id="add-record-name"
+                    value={addFormData.record_name}
+                    onChange={(e) => setAddFormData(prev => ({ ...prev, record_name: e.target.value }))}
+                    placeholder="Enter record name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="add-description">Description *</Label>
+                  <Textarea
+                    id="add-description"
+                    value={addFormData.description}
+                    onChange={(e) => setAddFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Enter record description"
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Record Details */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Record Details</h3>
+              <div className="grid gap-4">
+                {Object.keys(schema).map((field) => (
+                  <div key={field} className="space-y-2">
+                    <Label htmlFor={`add-detail-${field}`}>
+                      {field} ({schema[field]})
+                    </Label>
+                    <Input
+                      id={`add-detail-${field}`}
+                      value={addFormData.details[field] || ''}
+                      onChange={(e) => handleDetailsChange(field, e.target.value)}
+                      placeholder={`Enter ${field}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+              <div className="grid gap-4">
+                {Object.keys(addFormData.meta).map((key) => (
+                  <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <Input
+                      value={key}
+                      onChange={(e) => {
+                        const newKey = e.target.value;
+                        const value = addFormData.meta[key];
+                        setAddFormData(prev => {
+                          const newMeta = { ...prev.meta };
+                          delete newMeta[key];
+                          if (newKey) {
+                            newMeta[newKey] = value;
+                          }
+                          return { ...prev, meta: newMeta };
+                        });
+                      }}
+                      placeholder="Metadata key"
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={typeof addFormData.meta[key] === 'string' ? addFormData.meta[key] : JSON.stringify(addFormData.meta[key])}
+                        onChange={(e) => {
+                          let value: any = e.target.value;
+                          // Try to parse as JSON if it looks like an object
+                          if (value.startsWith('{') || value.startsWith('[')) {
+                            try {
+                              value = JSON.parse(value);
+                            } catch {
+                              // Keep as string if parsing fails
+                            }
+                          }
+                          handleMetaChange(key, value);
+                        }}
+                        placeholder="Metadata value (string or JSON)"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          setAddFormData(prev => {
+                            const newMeta = { ...prev.meta };
+                            delete newMeta[key];
+                            return { ...prev, meta: newMeta };
+                          });
+                        }}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const newKey = `key_${Date.now()}`;
+                    setAddFormData(prev => ({
+                      ...prev,
+                      meta: { ...prev.meta, [newKey]: '' }
+                    }));
+                  }}
+                >
+                  Add Metadata Field
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddModalOpen(false)} disabled={addLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddRecord} disabled={addLoading}>
+              {addLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Adding...
+                </>
+              ) : (
+                'Add Record'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Archive, RotateCcw } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -109,6 +109,8 @@ export function NamespaceDetailsPage() {
   const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
   const [isArchiveAlertOpen, setIsArchiveAlertOpen] = useState(false);
   const [isRestoreAlertOpen, setIsRestoreAlertOpen] = useState(false);
+  const [isRevokeAlertOpen, setIsRevokeAlertOpen] = useState(false);
+  const [isReinstateAlertOpen, setIsReinstateAlertOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [selectedRegistry, setSelectedRegistry] = useState<Registry | null>(null);
   const [createFormData, setCreateFormData] = useState<RegistryFormData>({
@@ -573,12 +575,23 @@ export function NamespaceDetailsPage() {
       const result = await response.json();
 
       if (response.ok && result.message === "Registry archived successfully") {
+        // Update local state immediately to show archived status
+        setRegistries(prevRegistries => 
+          prevRegistries.map(registry => 
+            registry.registry_id === selectedRegistry.registry_id 
+              ? { ...registry, is_archived: true }
+              : registry
+          )
+        );
+
         toast({
           title: 'Success!',
           description: `Registry "${selectedRegistry.registry_name}" archived successfully.`,
           // Ensure default variant (not destructive) for success
         });
-        await refreshRegistries();
+        
+        // Note: Not refreshing from server immediately to avoid overriding local state
+        // The local state update should be sufficient for immediate UI feedback
       } else {
         toast({
           title: 'Archive Error', // More specific title
@@ -632,12 +645,27 @@ export function NamespaceDetailsPage() {
       const result = await response.json();
 
       if (response.ok && result.message === "Registry restored successfully") {
+        console.log('🔄 Restore successful, updating local state for registry:', selectedRegistry.registry_id);
+        
+        // Update local state immediately to remove archived status
+        setRegistries(prevRegistries => {
+          const updatedRegistries = prevRegistries.map(registry => 
+            registry.registry_id === selectedRegistry.registry_id 
+              ? { ...registry, is_archived: false }
+              : registry
+          );
+          console.log('📊 Updated registries state:', updatedRegistries.find(r => r.registry_id === selectedRegistry.registry_id));
+          return updatedRegistries;
+        });
+
         toast({
           title: 'Success!',
           description: `Registry "${selectedRegistry.registry_name}" restored successfully.`,
            // Ensure default variant (not destructive) for success
         });
-        await refreshRegistries();
+        
+        // Note: Not refreshing from server immediately to avoid overriding local state
+        // The local state update should be sufficient for immediate UI feedback
       } else {
         // Handle specific 500 error from server or other non-ok responses
         const errorMessage = result.message || (response.status === 500 ? 'Internal Server Error' : 'Failed to restore registry');
@@ -656,6 +684,144 @@ export function NamespaceDetailsPage() {
       });
     } finally {
       setIsRestoreAlertOpen(false);
+      setSelectedRegistry(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenRevokeAlert = (registry: Registry) => {
+    setSelectedRegistry(registry);
+    setIsRevokeAlertOpen(true);
+  };
+
+  const handleRevokeRegistry = async () => {
+    if (!selectedRegistry) return;
+    setActionLoading(true);
+    try {
+      const { accessToken } = getAuthTokens();
+      if (!accessToken) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in to revoke the registry',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/revoke-registry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.message === "Registry revoked successfully") {
+        // Update local state immediately to show revoked status
+        setRegistries(prevRegistries => 
+          prevRegistries.map(registry => 
+            registry.registry_id === selectedRegistry.registry_id 
+              ? { ...registry, is_revoked: true }
+              : registry
+          )
+        );
+
+        toast({
+          title: 'Success!',
+          description: `Registry "${selectedRegistry.registry_name}" revoked successfully.`,
+        });
+        
+        // Note: Not refreshing from server immediately to avoid overriding local state
+        // The local state update should be sufficient for immediate UI feedback
+      } else {
+        toast({
+          title: 'Revoke Error',
+          description: result.message || 'Failed to revoke registry',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error revoking registry:', error);
+      toast({
+        title: 'Revoke Error',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRevokeAlertOpen(false);
+      setSelectedRegistry(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenReinstateAlert = (registry: Registry) => {
+    setSelectedRegistry(registry);
+    setIsReinstateAlertOpen(true);
+  };
+
+  const handleReinstateRegistry = async () => {
+    if (!selectedRegistry) return;
+    setActionLoading(true);
+    try {
+      const { accessToken } = getAuthTokens();
+      if (!accessToken) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in to reinstate the registry',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/reinstate-registry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        // body: JSON.stringify({}),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.message === "Registry reinstated successfully") {
+        // Update local state immediately to remove revoked status
+        setRegistries(prevRegistries => 
+          prevRegistries.map(registry => 
+            registry.registry_id === selectedRegistry.registry_id 
+              ? { ...registry, is_revoked: false }
+              : registry
+          )
+        );
+
+        toast({
+          title: 'Success!',
+          description: `Registry "${selectedRegistry.registry_name}" reinstated successfully.`,
+        });
+        
+        // Note: Not refreshing from server immediately to avoid overriding local state
+        // The local state update should be sufficient for immediate UI feedback
+      } else {
+        toast({
+          title: 'Reinstate Error',
+          description: result.message || 'Failed to reinstate registry',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error reinstating registry:', error);
+      toast({
+        title: 'Reinstate Error',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsReinstateAlertOpen(false);
       setSelectedRegistry(null);
       setActionLoading(false);
     }
@@ -1035,6 +1201,17 @@ export function NamespaceDetailsPage() {
                         Archive
                       </DropdownMenuItem>
                     )}
+                    {registry.is_revoked ? (
+                      <DropdownMenuItem onClick={() => handleOpenReinstateAlert(registry)} className="text-blue-600 focus:text-blue-600 focus:bg-blue-50">
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Reinstate
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => handleOpenRevokeAlert(registry)} className="text-orange-600 focus:text-orange-600 focus:bg-orange-50">
+                        <Ban className="mr-2 h-4 w-4" />
+                        Revoke
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </CardHeader>
@@ -1047,12 +1224,20 @@ export function NamespaceDetailsPage() {
                     Updated: {new Date(registry.updated_at).toLocaleDateString()}
                   </p>
                 </div>
-                {registry.is_archived && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      <Archive className="mr-1 h-3 w-3" />
-                      Archived
-                    </span>
+                {(registry.is_archived || registry.is_revoked) && (
+                  <div className="mt-2 flex gap-2">
+                    {registry.is_archived && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <Archive className="mr-1 h-3 w-3" />
+                        Archived
+                      </span>
+                    )}
+                    {registry.is_revoked && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        <Ban className="mr-1 h-3 w-3" />
+                        Revoked
+                      </span>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -1250,6 +1435,58 @@ export function NamespaceDetailsPage() {
                 </>
               ) : (
                 'Restore'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isRevokeAlertOpen} onOpenChange={setIsRevokeAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to revoke this registry?</AlertDialogTitle>
+            {selectedRegistry && (
+              <AlertDialogDescription>
+                This action will revoke the registry "{selectedRegistry.registry_name}". This will make the registry inactive and prevent its use.
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedRegistry(null)} disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevokeRegistry} className="bg-orange-600 hover:bg-orange-700" disabled={actionLoading}>
+              {actionLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Revoking...
+                </>
+              ) : (
+                'Revoke'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isReinstateAlertOpen} onOpenChange={setIsReinstateAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to reinstate this registry?</AlertDialogTitle>
+            {selectedRegistry && (
+              <AlertDialogDescription>
+                This action will reinstate the registry "{selectedRegistry.registry_name}", making it active again.
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedRegistry(null)} disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReinstateRegistry} className="bg-blue-600 hover:bg-blue-700" disabled={actionLoading}>
+              {actionLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Reinstating...
+                </>
+              ) : (
+                'Reinstate'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
