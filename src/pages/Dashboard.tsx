@@ -419,39 +419,56 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Your Namespaces</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage and organize your projects in dedicated namespaces
-        </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900">
+      {/* Animated background pattern */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="w-full h-full" style={{ 
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(156, 146, 172, 0.15) 1px, transparent 0)',
+          backgroundSize: '20px 20px'
+        }}></div>
       </div>
+      
+      {/* Floating orbs */}
+      <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+      <div className="absolute top-40 right-20 w-72 h-72 bg-teal-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
+      <div className="absolute bottom-20 left-40 w-72 h-72 bg-green-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{ animationDelay: '4s' }}></div>
 
-      <Button className="mb-8 px-8 py-6 text-lg" onClick={() => setIsCreateModalOpen(true)}>
-        <Plus className="mr-2 h-5 w-5" />
-        Create Namespace
-      </Button>
-
-      {namespaces.length === 0 ? (
-        <div className="text-center py-12">
-          <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No namespaces found</h3>
-          <p className="text-muted-foreground">
-            Get started by creating your first namespace
+      <div className="container mx-auto px-4 py-12 relative z-10">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white">Your Namespaces</h1>
+          <p className="text-emerald-200 mt-2 text-lg">
+            Manage and organize your projects in dedicated namespaces
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {namespaces.map((namespace) => (
-            <Card 
-              key={namespace.namespace_id} 
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleNamespaceClick(namespace.namespace_id)}
-            >
+
+        <Button 
+          className="mb-8 px-8 py-6 text-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border-0" 
+          onClick={() => setIsCreateModalOpen(true)}
+        >
+          <Plus className="mr-2 h-5 w-5" />
+          Create Namespace
+        </Button>
+
+        {namespaces.length === 0 ? (
+          <div className="text-center py-12">
+            <AlertCircle className="mx-auto h-12 w-12 text-emerald-400 mb-4" />
+            <h3 className="text-lg font-medium mb-2 text-white">No namespaces found</h3>
+            <p className="text-emerald-200">
+              Get started by creating your first namespace
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {namespaces.map((namespace) => (
+              <Card 
+                key={namespace.namespace_id} 
+                className="bg-white/10 backdrop-blur-sm border-white/20 hover:bg-white/15 transition-all cursor-pointer"
+                onClick={() => handleNamespaceClick(namespace.namespace_id)}
+              >
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>{namespace.name}</CardTitle>
-                  <CardDescription>{namespace.description}</CardDescription>
+                  <CardTitle className="text-white">{namespace.name}</CardTitle>
+                  <CardDescription className="text-emerald-200">{namespace.description}</CardDescription>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -473,10 +490,10 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-emerald-300">
                     Created: {new Date(namespace.created_at).toLocaleDateString()}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-emerald-300">
                     Updated: {new Date(namespace.updated_at).toLocaleDateString()}
                   </p>
                 </div>
@@ -625,6 +642,7 @@ export function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

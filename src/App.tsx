@@ -10,6 +10,7 @@ import { DashboardPage } from '@/pages/Dashboard';
 import { NamespaceDetailsPage } from '@/pages/NamespaceDetails';
 import { RecordsPage } from '@/pages/Records';
 import { RecordDetailsPage } from '@/pages/RecordDetails';
+import { RegistryDetailsPage } from '@/pages/RegistryDetails';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/namespaces/:namespaceId" element={<NamespaceDetailsPage />} />
+            <Route path="/namespaces/:namespaceId/registries/:registryName" element={<RegistryDetailsPage />} />
             <Route path="/:namespaceId/:registryName" element={<RecordsPage />} />
             <Route path="/:namespaceId/:registryName/:recordName" element={<RecordDetailsPage />} />
           </Routes>

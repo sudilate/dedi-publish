@@ -320,11 +320,19 @@ export function RecordsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading records...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900">
+        <div className="absolute inset-0 opacity-20">
+          <div className="w-full h-full" style={{ 
+            backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(156, 146, 172, 0.15) 1px, transparent 0)',
+            backgroundSize: '20px 20px'
+          }}></div>
+        </div>
+        <div className="container mx-auto px-4 py-12 relative z-10">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-400 mx-auto"></div>
+              <p className="mt-4 text-indigo-200">Loading records...</p>
+            </div>
           </div>
         </div>
       </div>
@@ -332,32 +340,76 @@ export function RecordsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <Breadcrumb className="mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900">
+      {/* Animated background pattern */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="w-full h-full" style={{ 
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(156, 146, 172, 0.15) 1px, transparent 0)',
+          backgroundSize: '20px 20px'
+        }}></div>
+      </div>
+      
+      {/* Floating orbs */}
+      <div className="absolute top-20 left-20 w-72 h-72 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+      <div className="absolute top-40 right-20 w-72 h-72 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
+      <div className="absolute bottom-20 left-40 w-72 h-72 bg-cyan-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{ animationDelay: '4s' }}></div>
+
+      <div className="container mx-auto px-4 py-12 relative z-10">
+      <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink href={`/namespaces/${namespaceId}`}>{namespaceName}</BreadcrumbLink>
+            <BreadcrumbLink 
+              onClick={() => navigate('/dashboard')}
+              className="text-indigo-200 hover:text-white transition-colors cursor-pointer"
+            >
+              Dashboard
+            </BreadcrumbLink>
           </BreadcrumbItem>
-          <BreadcrumbSeparator />
+          <BreadcrumbSeparator className="text-indigo-300" />
           <BreadcrumbItem>
-            <BreadcrumbPage>{registryDisplayName}</BreadcrumbPage>
+            <BreadcrumbLink 
+              onClick={() => navigate(`/namespaces/${namespaceId}`)}
+              className="text-indigo-200 hover:text-white transition-colors cursor-pointer"
+            >
+              {namespaceName}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator className="text-indigo-300" />
+          <BreadcrumbItem>
+            <BreadcrumbLink 
+              onClick={() => navigate(`/namespaces/${namespaceId}/registries/${registryName}`)}
+              className="text-indigo-200 hover:text-white transition-colors cursor-pointer"
+            >
+              {registryDisplayName}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator className="text-indigo-300" />
+          <BreadcrumbItem>
+            <BreadcrumbPage className="text-white font-medium">Records</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Records</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-4xl font-bold text-white">Records</h1>
+        <p className="text-indigo-200 mt-2 text-lg">
           Manage records in {registryDisplayName} ({totalRecords} total records)
         </p>
       </div>
 
       <div className="flex justify-start gap-4 mb-8">
-        <Button onClick={handleOpenAddModal} className="px-8 py-6 text-lg">
+        <Button 
+          onClick={handleOpenAddModal} 
+          className="px-8 py-6 text-lg bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0"
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Record
         </Button>
-        <Button variant="outline" onClick={handleBulkUpload} className="px-8 py-6 text-lg">
+        <Button 
+          variant="outline" 
+          onClick={handleBulkUpload} 
+          className="px-8 py-6 text-lg border-indigo-400 text-indigo-200 hover:bg-indigo-500/20"
+        >
           <Upload className="mr-2 h-4 w-4" />
           Bulk Upload
         </Button>
@@ -365,41 +417,41 @@ export function RecordsPage() {
 
       {records.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-lg font-medium mb-2">No records found</div>
-          <p className="text-muted-foreground">
+          <div className="text-lg font-medium mb-2 text-white">No records found</div>
+          <p className="text-indigo-200">
             Get started by adding your first record
           </p>
         </div>
       ) : (
-        <Card>
+        <Card className="bg-white/10 backdrop-blur-sm border-white/20">
           <CardHeader>
-            <CardTitle>Registry Records</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-white">Registry Records</CardTitle>
+            <CardDescription className="text-indigo-200">
               Showing {records.length} of {totalRecords} records
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
+            <div className="rounded-md border border-white/20">
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="border-white/20 hover:bg-white/5">
                     {getColumnHeaders().map((header) => (
-                      <TableHead key={header} className="font-medium">
+                      <TableHead key={header} className="font-medium text-indigo-200">
                         {header}
                       </TableHead>
                     ))}
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    <TableHead className="w-[100px] text-indigo-200">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {records.map((record) => (
                     <TableRow 
                       key={record.record_id} 
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-white/10 border-white/10 transition-colors"
                       onClick={() => handleRowClick(record)}
                     >
                       {getColumnHeaders().map((column) => (
-                        <TableCell key={column}>
+                        <TableCell key={column} className="text-white">
                           {getCellValue(record, column)}
                         </TableCell>
                       ))}
@@ -574,6 +626,7 @@ export function RecordsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 } 

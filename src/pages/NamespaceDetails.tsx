@@ -1085,7 +1085,7 @@ export function NamespaceDetailsPage() {
   };
 
   const handleRegistryClick = (registry: Registry) => {
-    navigate(`/${namespaceId}/${registry.registry_name}`);
+    navigate(`/namespaces/${namespaceId}/registries/${registry.registry_name}`);
   };
 
   if (loading) {
@@ -1102,7 +1102,21 @@ export function NamespaceDetailsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+      {/* Animated background pattern */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="w-full h-full" style={{ 
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(156, 146, 172, 0.15) 1px, transparent 0)',
+          backgroundSize: '20px 20px'
+        }}></div>
+      </div>
+      
+      {/* Floating orbs */}
+      <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+      <div className="absolute top-40 right-20 w-72 h-72 bg-cyan-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
+      <div className="absolute bottom-20 left-40 w-72 h-72 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{ animationDelay: '4s' }}></div>
+
+      <div className="container mx-auto px-4 py-12 relative z-10">
       {/* Global Upload Progress Notification */}
       {globalUploadStatus?.isUploading && (
         <div className="fixed top-4 right-4 z-50 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md shadow-lg max-w-sm">
@@ -1134,13 +1148,13 @@ export function NamespaceDetailsPage() {
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbPage>{namespaceName}</BreadcrumbPage>
+            <BreadcrumbPage className="text-white">{namespaceName}</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Your Registries</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-3xl font-bold text-white">Your Registries</h1>
+        <p className="text-blue-200 mt-2">
           Manage and organize your registries in this namespace
         </p>
       </div>
@@ -1580,6 +1594,7 @@ export function NamespaceDetailsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
