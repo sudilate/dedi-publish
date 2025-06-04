@@ -46,7 +46,7 @@ interface NamespaceFormData {
 }
 
 export function DashboardPage() {
-  const { user, isAuthenticated, getAuthTokens } = useAuth();
+  const { isAuthenticated, getAuthTokens } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [namespaces, setNamespaces] = useState<Namespace[]>([]);

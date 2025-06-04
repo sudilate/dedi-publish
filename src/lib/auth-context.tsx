@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { signupUser, loginUser, SignupRequest, LoginRequest, ApiResponse, User as ApiUser } from './api';
+import { signupUser, loginUser, SignupRequest, LoginRequest } from './api';
 
 // JWT decoder function
 function decodeJWT(token: string) {
