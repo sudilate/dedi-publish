@@ -33,13 +33,13 @@ export function HomePage() {
         <div className="container mx-auto px-4 z-10">
           <div className="max-w-4xl mx-auto text-center space-y-8">
             <Badge variant="secondary" className="px-4 py-2 text-base mb-4">
-              Introducing DEDI-Publish
+              Introducing DeDi
             </Badge>
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
               Decentralized Data Registry
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              A modern directory creation system with enterprise-grade security and seamless integration capabilities.
+            Turn your data into trusted, tamper-proof services in 3 clicks. From folders to revenue — DeDi makes your data speak for itself.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
               <Button size="lg" className="text-lg h-12 px-8" onClick={() => navigate('/signup')}>
