@@ -50,13 +50,13 @@ export function Header() {
       className={cn(
         "fixed top-0 w-full py-4 z-50 transition-all duration-300",
         isScrolled
-          ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm shadow-sm"
-          : "bg-transparent border-b border-slate-200/60 dark:border-slate-700/60"
+          ? "bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-sm border-b border-slate-200/60"
+          : "bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 dark:border-slate-700/60"
       )}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <h2 className="text-xl font-bold text-primary">Decentralized Directory</h2>
+          <h2 className="text-xl font-bold text-primary">DeDi</h2>
         </Link>
         
         {/* Desktop navigation */}
