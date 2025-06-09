@@ -36,6 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 
@@ -105,6 +106,7 @@ export function RecordsPage() {
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
+  const [showAddMetadata, setShowAddMetadata] = useState(false);
   const [addFormData, setAddFormData] = useState<AddRecordFormData>({
     record_name: '',
     description: '',
@@ -179,6 +181,7 @@ export function RecordsPage() {
       details: initialDetails,
       meta: {},
     });
+    setShowAddMetadata(false);
     setIsAddModalOpen(true);
   };
 
@@ -234,7 +237,7 @@ export function RecordsPage() {
           record_name: addFormData.record_name.trim(),
           description: addFormData.description.trim(),
           details: addFormData.details,
-          meta: addFormData.meta,
+          ...(showAddMetadata && Object.keys(addFormData.meta).length > 0 && { meta: addFormData.meta }),
         }),
       });
 
@@ -487,74 +490,81 @@ export function RecordsPage() {
 
             {/* Metadata */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Metadata (Optional)</h3>
-              <div className="grid gap-4">
-                {Object.keys(addFormData.meta).map((key) => (
-                  <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <Input
-                      value={key}
-                      onChange={(e) => {
-                        const newKey = e.target.value;
-                        const value = addFormData.meta[key];
-                        setAddFormData(prev => {
-                          const newMeta = { ...prev.meta };
-                          delete newMeta[key];
-                          if (newKey) {
-                            newMeta[newKey] = value;
-                          }
-                          return { ...prev, meta: newMeta };
-                        });
-                      }}
-                      placeholder="Metadata key"
-                    />
-                    <div className="flex gap-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+                <Switch
+                  checked={showAddMetadata}
+                  onCheckedChange={setShowAddMetadata}
+                />
+              </div>
+              {showAddMetadata && (
+                <div className="grid gap-4">
+                  {Object.keys(addFormData.meta).map((key) => (
+                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
-                        value={typeof addFormData.meta[key] === 'string' ? addFormData.meta[key] : JSON.stringify(addFormData.meta[key])}
+                        value={key}
                         onChange={(e) => {
-                          let value: any = e.target.value;
-                          // Try to parse as JSON if it looks like an object
-                          if (value.startsWith('{') || value.startsWith('[')) {
-                            try {
-                              value = JSON.parse(value);
-                            } catch {
-                              // Keep as string if parsing fails
-                            }
-                          }
-                          handleMetaChange(key, value);
-                        }}
-                        placeholder="Metadata value (string or JSON)"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
+                          const newKey = e.target.value;
+                          const value = addFormData.meta[key];
                           setAddFormData(prev => {
                             const newMeta = { ...prev.meta };
                             delete newMeta[key];
+                            if (newKey) {
+                              newMeta[newKey] = value;
+                            }
                             return { ...prev, meta: newMeta };
                           });
                         }}
-                      >
-                        ×
-                      </Button>
+                        placeholder="key"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={typeof addFormData.meta[key] === 'string' ? addFormData.meta[key] : JSON.stringify(addFormData.meta[key])}
+                          onChange={(e) => {
+                            let value: any = e.target.value;
+                            // Try to parse as JSON if it looks like an object
+                            if (value.startsWith('{') || value.startsWith('[')) {
+                              try {
+                                value = JSON.parse(value);
+                              } catch {
+                                // Keep as string if parsing fails
+                              }
+                            }
+                            handleMetaChange(key, value);
+                          }}
+                          placeholder="value"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setAddFormData(prev => {
+                              const newMeta = { ...prev.meta };
+                              delete newMeta[key];
+                              return { ...prev, meta: newMeta };
+                            });
+                          }}
+                        >
+                          ×
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const newKey = `key_${Date.now()}`;
-                    setAddFormData(prev => ({
-                      ...prev,
-                      meta: { ...prev.meta, [newKey]: '' }
-                    }));
-                  }}
-                >
-                  Add Metadata Field
-                </Button>
-              </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setAddFormData(prev => ({
+                        ...prev,
+                        meta: { ...prev.meta, "": "" }
+                      }));
+                    }}
+                  >
+                    Add Metadata Field
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
