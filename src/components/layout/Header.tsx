@@ -50,8 +50,8 @@ export function Header() {
       className={cn(
         "fixed top-0 w-full py-4 z-50 transition-all duration-300",
         isScrolled
-          ? "bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-sm border-b border-slate-200/60"
-          : "bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 dark:border-slate-700/60"
+          ? "bg-amber-50/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-sm border-b border-amber-100/60"
+          : "bg-amber-50/80 backdrop-blur-sm border-b border-amber-100/60 dark:border-slate-700/60"
       )}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
@@ -65,7 +65,7 @@ export function Header() {
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost\" className="relative h-8 w-8 rounded-full">
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="bg-primary/10 text-primary font-medium">{getInitials()}</AvatarFallback>
                     </Avatar>
