@@ -29,6 +29,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   signup: (userData: {
     username: string;
@@ -50,6 +51,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Initialize user from stored tokens on app load
   React.useEffect(() => {
@@ -90,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('creator_id');
         }
       }
+      setIsLoading(false);
     };
 
     initializeAuth();
@@ -189,7 +192,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const response = await signupUser(signupData);
       
-      if (response.message === "Resource created successfully") {
+      // Check for various success messages that might be returned by the API
+      const successMessages = [
+        "Resource created successfully",
+        "User created successfully", 
+        "Account created successfully",
+        "Registration successful",
+        "created successfully",
+        "success"
+      ];
+      
+            if (response.message && successMessages.some(msg => 
+        response.message.toLowerCase().includes(msg.toLowerCase()) || 
+        msg.toLowerCase().includes(response.message.toLowerCase())
+      )) {
         // Signup successful - but DO NOT log in the user automatically
         // They need to verify email and manually login
         return true;
@@ -232,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isAuthenticated: !!user,
+        isLoading,
         login,
         signup,
         logout,

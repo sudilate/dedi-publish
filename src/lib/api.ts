@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create an axios instance with default configuration
 // You can replace the baseURL with your actual API URL when ready
 const api = axios.create({
-  baseURL: 'http://localhost:5106', // Replace with your API URL
+  baseURL: 'https://dev.dedi.global', // Replace with your API URL
   headers: {
     'Content-Type': 'application/json',
   },
@@ -104,10 +104,23 @@ export async function signupUser(userData: SignupRequest): Promise<ApiResponse<U
 
     const result = await response.json();
     
-    // Always return the result - let the calling function handle success/error
-    return result;
+    // Check if the HTTP status indicates success (200-299)
+    if (response.ok) {
+      // For successful responses, ensure we have a success message
+      if (!result.message) {
+        result.message = "Resource created successfully";
+      }
+      return result;
+    } else {
+      // For non-success HTTP status codes, throw an error with the response message
+      const errorMessage = result.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
+      throw new Error(errorMessage);
+    }
     
   } catch (error) {
+    if (error instanceof Error) {
+      throw error; // Re-throw existing errors
+    }
     throw new Error('Network error occurred while registering');
   }
 }
