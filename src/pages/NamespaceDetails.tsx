@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -18,9 +18,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -65,6 +73,12 @@ interface RegistryFormData {
   description: string;
   schema: string;
   metadata: string;
+  meta: { [key: string]: any };
+}
+
+interface SchemaField {
+  key: string;
+  type: string;
 }
 
 interface DelegateFormData {
@@ -118,12 +132,14 @@ export function NamespaceDetailsPage() {
     description: '',
     schema: '',
     metadata: '',
+    meta: {},
   });
   const [updateFormData, setUpdateFormData] = useState<RegistryFormData>({
     name: '',
     description: '',
     schema: '',
     metadata: '',
+    meta: {},
   });
   const [delegateFormData, setDelegateFormData] = useState<DelegateFormData>({
     email: '',
@@ -131,6 +147,9 @@ export function NamespaceDetailsPage() {
   });
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [schemaFields, setSchemaFields] = useState<SchemaField[]>([{ key: '', type: 'string' }]);
+  const [showCreateMetadata, setShowCreateMetadata] = useState(false);
+  const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
 
   // Check for ongoing upload on component mount
   useEffect(() => {
@@ -304,41 +323,39 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      if (!createFormData.schema.trim()) {
+      // Validate schema fields
+      const validSchemaFields = schemaFields.filter(field => field.key.trim() !== '');
+      if (validSchemaFields.length === 0) {
         toast({
           title: 'Validation Error',
-          description: 'Schema is required',
+          description: 'At least one schema field is required',
           variant: 'destructive',
         });
         return;
       }
 
-      // Parse schema
-      let parsedSchema;
-      try {
-        parsedSchema = JSON.parse(createFormData.schema);
-      } catch (error) {
+      // Check for duplicate keys
+      const keys = validSchemaFields.map(field => field.key.trim());
+      const uniqueKeys = new Set(keys);
+      if (keys.length !== uniqueKeys.size) {
         toast({
           title: 'Validation Error',
-          description: 'Schema must be valid JSON',
+          description: 'Schema field keys must be unique',
           variant: 'destructive',
         });
         return;
       }
+
+      // Convert schema fields to JSON format
+      const parsedSchema: { [key: string]: string } = {};
+      validSchemaFields.forEach(field => {
+        parsedSchema[field.key.trim()] = field.type;
+      });
 
       // Parse metadata (optional)
       let parsedMeta = {};
-      if (createFormData.metadata.trim()) {
-        try {
-          parsedMeta = JSON.parse(createFormData.metadata);
-        } catch (error) {
-          toast({
-            title: 'Validation Error',
-            description: 'Metadata must be valid JSON',
-            variant: 'destructive',
-          });
-          return;
-        }
+      if (showCreateMetadata && Object.keys(createFormData.meta).length > 0) {
+        parsedMeta = createFormData.meta;
       }
 
       // Get auth tokens
@@ -364,7 +381,7 @@ export function NamespaceDetailsPage() {
           description: createFormData.description.trim(),
           schema: parsedSchema,
           query_allowed: true,
-          ...(createFormData.metadata.trim() && { meta: parsedMeta })
+          ...(Object.keys(parsedMeta).length > 0 && { meta: parsedMeta })
         }),
       });
 
@@ -376,7 +393,9 @@ export function NamespaceDetailsPage() {
           description: 'Registry created successfully',
         });
         setIsCreateModalOpen(false);
-        setCreateFormData({ name: '', description: '', schema: '', metadata: '' });
+        setCreateFormData({ name: '', description: '', schema: '', metadata: '', meta: {} });
+        setSchemaFields([{ key: '', type: 'string' }]);
+        setShowCreateMetadata(false);
         // Refresh the registries list
         await refreshRegistries();
       } else {
@@ -402,7 +421,8 @@ export function NamespaceDetailsPage() {
     setSelectedRegistry(registry);
     
     // Handle metadata properly - only show if it exists and has content
-    let metadataString = '';
+    let metaObj = {};
+    let hasMetadata = false;
     if (registry.meta && typeof registry.meta === 'object' && Object.keys(registry.meta).length > 0) {
       // Check if meta has actual content (not just empty object)
       const hasContent = Object.values(registry.meta).some(value => 
@@ -410,7 +430,8 @@ export function NamespaceDetailsPage() {
         (typeof value !== 'object' || Object.keys(value).length > 0)
       );
       if (hasContent) {
-        metadataString = JSON.stringify(registry.meta, null, 2);
+        metaObj = registry.meta;
+        hasMetadata = true;
       }
     }
     
@@ -418,8 +439,10 @@ export function NamespaceDetailsPage() {
       name: registry.registry_name,
       description: registry.description,
       schema: '', // Remove schema from update form
-      metadata: metadataString,
+      metadata: '',
+      meta: metaObj,
     });
+    setShowUpdateMetadata(hasMetadata);
     setIsUpdateModalOpen(true);
   };
 
@@ -450,17 +473,8 @@ export function NamespaceDetailsPage() {
 
       // Parse metadata (optional)
       let parsedMeta = {};
-      if (updateFormData.metadata.trim()) {
-        try {
-          parsedMeta = JSON.parse(updateFormData.metadata);
-        } catch (error) {
-          toast({
-            title: 'Validation Error',
-            description: 'Metadata must be valid JSON',
-            variant: 'destructive',
-          });
-          return;
-        }
+      if (showUpdateMetadata && Object.keys(updateFormData.meta).length > 0) {
+        parsedMeta = updateFormData.meta;
       }
 
       // Get auth tokens
@@ -482,9 +496,8 @@ export function NamespaceDetailsPage() {
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          new_registry_name: updateFormData.name.trim(),
           description: updateFormData.description.trim(),
-          ...(updateFormData.metadata.trim() && { meta: parsedMeta })
+          ...(Object.keys(parsedMeta).length > 0 && { meta: parsedMeta })
         }),
       });
 
@@ -1088,6 +1101,40 @@ export function NamespaceDetailsPage() {
     navigate(`/${namespaceId}/${registry.registry_name}`);
   };
 
+  const addSchemaField = () => {
+    setSchemaFields(prev => [...prev, { key: '', type: 'string' }]);
+  };
+
+  const removeSchemaField = (index: number) => {
+    setSchemaFields(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateSchemaField = (index: number, field: 'key' | 'type', value: string) => {
+    setSchemaFields(prev => prev.map((item, i) => 
+      i === index ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const handleCreateMetaChange = (key: string, value: any) => {
+    setCreateFormData(prev => ({
+      ...prev,
+      meta: {
+        ...prev.meta,
+        [key]: value,
+      },
+    }));
+  };
+
+  const handleUpdateMetaChange = (key: string, value: any) => {
+    setUpdateFormData(prev => ({
+      ...prev,
+      meta: {
+        ...prev.meta,
+        [key]: value,
+      },
+    }));
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-12">
@@ -1247,7 +1294,7 @@ export function NamespaceDetailsPage() {
       )}
 
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create Registry</DialogTitle>
           </DialogHeader>
@@ -1272,24 +1319,131 @@ export function NamespaceDetailsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-schema">Schema *</Label>
-              <Textarea
-                id="create-schema"
-                value={createFormData.schema}
-                onChange={(e) => setCreateFormData({ ...createFormData, schema: e.target.value })}
-                placeholder='Enter schema in JSON format, e.g., {"type": "object", "properties": {"name": {"type": "string"}}}'
-                rows={4}
-              />
+              <div className="flex items-center justify-between">
+                <Label>Schema *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSchemaField}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Field
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {schemaFields.map((field, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <Input
+                      placeholder="Field name"
+                      value={field.key}
+                      onChange={(e) => updateSchemaField(index, 'key', e.target.value)}
+                      className="flex-1"
+                    />
+                    <Select
+                      value={field.type}
+                      onValueChange={(value) => updateSchemaField(index, 'type', value)}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="string">string</SelectItem>
+                        <SelectItem value="int">int</SelectItem>
+                        <SelectItem value="float">float</SelectItem>
+                        <SelectItem value="bool">bool</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {schemaFields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeSchemaField(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-metadata">Metadata (optional)</Label>
-              <Textarea
-                id="create-metadata"
-                value={createFormData.metadata}
-                onChange={(e) => setCreateFormData({ ...createFormData, metadata: e.target.value })}
-                placeholder='Enter metadata in JSON format, e.g., {"category": "component", "version": "1.0"}'
-                rows={3}
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="create-metadata">Metadata (optional)</Label>
+                <Switch
+                  checked={showCreateMetadata}
+                  onCheckedChange={setShowCreateMetadata}
+                />
+              </div>
+              {showCreateMetadata && (
+                <div className="grid gap-4">
+                  {Object.keys(createFormData.meta).map((key) => (
+                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        value={key}
+                        onChange={(e) => {
+                          const newKey = e.target.value;
+                          const value = createFormData.meta[key];
+                          setCreateFormData(prev => {
+                            const newMeta = { ...prev.meta };
+                            delete newMeta[key];
+                            if (newKey) {
+                              newMeta[newKey] = value;
+                            }
+                            return { ...prev, meta: newMeta };
+                          });
+                        }}
+                        placeholder="key"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={typeof createFormData.meta[key] === 'string' ? createFormData.meta[key] : JSON.stringify(createFormData.meta[key])}
+                          onChange={(e) => {
+                            let value: any = e.target.value;
+                            // Try to parse as JSON if it looks like an object
+                            if (value.startsWith('{') || value.startsWith('[')) {
+                              try {
+                                value = JSON.parse(value);
+                              } catch {
+                                // Keep as string if parsing fails
+                              }
+                            }
+                            handleCreateMetaChange(key, value);
+                          }}
+                          placeholder="value"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setCreateFormData(prev => {
+                              const newMeta = { ...prev.meta };
+                              delete newMeta[key];
+                              return { ...prev, meta: newMeta };
+                            });
+                          }}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCreateFormData(prev => ({
+                        ...prev,
+                        meta: { ...prev.meta, "": "" }
+                      }));
+                    }}
+                  >
+                    Add Metadata Field
+                  </Button>
+                </div>
+              )}
             </div>
             <Button className="w-full" onClick={handleCreateRegistry} disabled={createLoading}>
               {createLoading ? (
@@ -1332,14 +1486,81 @@ export function NamespaceDetailsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="update-metadata">Metadata (optional)</Label>
-              <Textarea
-                id="update-metadata"
-                value={updateFormData.metadata}
-                onChange={(e) => setUpdateFormData({ ...updateFormData, metadata: e.target.value })}
-                placeholder='Enter metadata in JSON format, e.g., {"category": "component", "version": "1.0"}'
-                rows={3}
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="update-metadata">Metadata (optional)</Label>
+                <Switch
+                  checked={showUpdateMetadata}
+                  onCheckedChange={setShowUpdateMetadata}
+                />
+              </div>
+              {showUpdateMetadata && (
+                <div className="grid gap-4">
+                  {Object.keys(updateFormData.meta).map((key) => (
+                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        value={key}
+                        onChange={(e) => {
+                          const newKey = e.target.value;
+                          const value = updateFormData.meta[key];
+                          setUpdateFormData(prev => {
+                            const newMeta = { ...prev.meta };
+                            delete newMeta[key];
+                            if (newKey) {
+                              newMeta[newKey] = value;
+                            }
+                            return { ...prev, meta: newMeta };
+                          });
+                        }}
+                        placeholder="key"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={typeof updateFormData.meta[key] === 'string' ? updateFormData.meta[key] : JSON.stringify(updateFormData.meta[key])}
+                          onChange={(e) => {
+                            let value: any = e.target.value;
+                            // Try to parse as JSON if it looks like an object
+                            if (value.startsWith('{') || value.startsWith('[')) {
+                              try {
+                                value = JSON.parse(value);
+                              } catch {
+                                // Keep as string if parsing fails
+                              }
+                            }
+                            handleUpdateMetaChange(key, value);
+                          }}
+                          placeholder="value"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setUpdateFormData(prev => {
+                              const newMeta = { ...prev.meta };
+                              delete newMeta[key];
+                              return { ...prev, meta: newMeta };
+                            });
+                          }}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setUpdateFormData(prev => ({
+                        ...prev,
+                        meta: { ...prev.meta, "": "" }
+                      }));
+                    }}
+                  >
+                    Add Metadata Field
+                  </Button>
+                </div>
+              )}
             </div>
             <Button className="w-full" onClick={handleUpdateRegistry} disabled={updateLoading}>
               {updateLoading ? (

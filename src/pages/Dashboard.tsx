@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 
 // Interface for namespace data from API
@@ -43,10 +44,11 @@ interface NamespaceFormData {
   name: string;
   description: string;
   metadata: string;
+  meta: { [key: string]: any };
 }
 
 export function DashboardPage() {
-  const { isAuthenticated, getAuthTokens } = useAuth();
+  const { isAuthenticated, getAuthTokens, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [namespaces, setNamespaces] = useState<Namespace[]>([]);
@@ -57,19 +59,23 @@ export function DashboardPage() {
   const [selectedNamespace, setSelectedNamespace] = useState<Namespace | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showCreateMetadata, setShowCreateMetadata] = useState(false);
+  const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
   const [formData, setFormData] = useState<NamespaceFormData>({
     name: '',
     description: '',
     metadata: '',
+    meta: {},
   });
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    // Only redirect if auth initialization is complete and user is not authenticated
+    if (!isLoading && !isAuthenticated) {
       navigate('/login');
-    } else {
+    } else if (!isLoading && isAuthenticated) {
       fetchNamespaces();
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isLoading, navigate]);
 
   const fetchNamespaces = async () => {
     try {
@@ -136,11 +142,14 @@ export function DashboardPage() {
         
         setNamespaces(latestNamespaces);
       } else {
-        toast({
-          title: 'Error',
-          description: result.message || 'Failed to fetch namespaces',
-          variant: 'destructive',
-        });
+        // Don't show toast for "Namespace not found" as it's a normal case for new users
+        if (result.message !== "Namespace not found") {
+          toast({
+            title: 'Error',
+            description: result.message || 'Failed to fetch namespaces',
+            variant: 'destructive',
+          });
+        }
       }
     } catch (error) {
       console.error('Error fetching namespaces:', error);
@@ -154,8 +163,8 @@ export function DashboardPage() {
     }
   };
 
-  // Show loading state while user data is being set or while fetching namespaces
-  if (!isAuthenticated || loading) {
+  // Show loading state while auth is initializing or while fetching namespaces
+  if (isLoading || loading) {
     return (
       <div className="container mx-auto px-4 py-12">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -203,19 +212,10 @@ export function DashboardPage() {
 
       // Prepare meta field
       let meta;
-      try {
-        if (formData.metadata.trim()) {
-          meta = JSON.parse(formData.metadata);
-        } else {
-          meta = { additionalProp1: {} };
-        }
-      } catch (error) {
-        toast({
-          title: 'Validation Error',
-          description: 'Invalid JSON format in metadata field.',
-          variant: 'destructive',
-        });
-        return;
+      if (showCreateMetadata && Object.keys(formData.meta).length > 0) {
+        meta = formData.meta;
+      } else {
+        meta = { additionalProp1: {} };
       }
 
       const requestBody = {
@@ -248,7 +248,8 @@ export function DashboardPage() {
         
         // Close modal and reset form
         setIsCreateModalOpen(false);
-        setFormData({ name: '', description: '', metadata: '' });
+        setFormData({ name: '', description: '', metadata: '', meta: {} });
+        setShowCreateMetadata(false);
         
         // Refresh the namespaces list
         await fetchNamespaces();
@@ -308,19 +309,10 @@ export function DashboardPage() {
 
       // Prepare meta field
       let meta;
-      try {
-        if (formData.metadata.trim()) {
-          meta = JSON.parse(formData.metadata);
-        } else {
-          meta = { additionalProp1: {} };
-        }
-      } catch (error) {
-        toast({
-          title: 'Validation Error',
-          description: 'Invalid JSON format in metadata field.',
-          variant: 'destructive',
-        });
-        return;
+      if (showUpdateMetadata && Object.keys(formData.meta).length > 0) {
+        meta = formData.meta;
+      } else {
+        meta = { additionalProp1: {} };
       }
 
       const requestBody = {
@@ -351,7 +343,7 @@ export function DashboardPage() {
         // Close modal and reset form
         setIsUpdateModalOpen(false);
         setSelectedNamespace(null);
-        setFormData({ name: '', description: '', metadata: '' });
+        setFormData({ name: '', description: '', metadata: '', meta: {} });
         
         // Refresh the namespaces list
         await fetchNamespaces();
@@ -406,16 +398,44 @@ export function DashboardPage() {
 
   const openUpdateModal = (namespace: Namespace) => {
     setSelectedNamespace(namespace);
+    
+    // Check if namespace has meaningful metadata
+    let hasMetadata = false;
+    let metaObj = {};
+    if (namespace.meta && typeof namespace.meta === 'object' && Object.keys(namespace.meta).length > 0) {
+      // Check if meta has actual content (not just empty object or additionalProp1)
+      const hasContent = Object.values(namespace.meta).some(value => 
+        value !== null && value !== undefined && value !== '' && 
+        (typeof value !== 'object' || Object.keys(value).length > 0)
+      );
+      if (hasContent) {
+        metaObj = namespace.meta;
+        hasMetadata = true;
+      }
+    }
+    
     setFormData({
       name: namespace.name,
       description: namespace.description,
-      metadata: JSON.stringify(namespace.meta, null, 2),
+      metadata: '',
+      meta: metaObj,
     });
+    setShowUpdateMetadata(hasMetadata);
     setIsUpdateModalOpen(true);
   };
 
   const handleNamespaceClick = (namespaceId: string) => {
     navigate(`/namespaces/${namespaceId}`);
+  };
+
+  const handleMetaChange = (key: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      meta: {
+        ...prev.meta,
+        [key]: value,
+      },
+    }));
   };
 
   return (
@@ -535,16 +555,81 @@ export function DashboardPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Metadata (Optional)</label>
-              <Textarea
-                value={formData.metadata}
-                onChange={(e) => setFormData({ ...formData, metadata: e.target.value })}
-                placeholder='Enter metadata in JSON format (e.g., {"key": "value"})'
-                rows={3}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave empty to use default metadata structure
-              </p>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Metadata (Optional)</label>
+                <Switch
+                  checked={showCreateMetadata}
+                  onCheckedChange={setShowCreateMetadata}
+                />
+              </div>
+              {showCreateMetadata && (
+                <div className="grid gap-4">
+                  {Object.keys(formData.meta).map((key) => (
+                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        value={key}
+                        onChange={(e) => {
+                          const newKey = e.target.value;
+                          const value = formData.meta[key];
+                          setFormData(prev => {
+                            const newMeta = { ...prev.meta };
+                            delete newMeta[key];
+                            if (newKey) {
+                              newMeta[newKey] = value;
+                            }
+                            return { ...prev, meta: newMeta };
+                          });
+                        }}
+                        placeholder="key"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={typeof formData.meta[key] === 'string' ? formData.meta[key] : JSON.stringify(formData.meta[key])}
+                          onChange={(e) => {
+                            let value: any = e.target.value;
+                            // Try to parse as JSON if it looks like an object
+                            if (value.startsWith('{') || value.startsWith('[')) {
+                              try {
+                                value = JSON.parse(value);
+                              } catch {
+                                // Keep as string if parsing fails
+                              }
+                            }
+                            handleMetaChange(key, value);
+                          }}
+                          placeholder="value"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setFormData(prev => {
+                              const newMeta = { ...prev.meta };
+                              delete newMeta[key];
+                              return { ...prev, meta: newMeta };
+                            });
+                          }}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        meta: { ...prev.meta, "": "" }
+                      }));
+                    }}
+                  >
+                    Add Metadata Field
+                  </Button>
+                </div>
+              )}
             </div>
             <Button className="w-full" onClick={handleCreateNamespace} disabled={isCreating}>
               {isCreating ? (
@@ -584,12 +669,81 @@ export function DashboardPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Metadata</label>
-              <Textarea
-                value={formData.metadata}
-                onChange={(e) => setFormData({ ...formData, metadata: e.target.value })}
-                placeholder="Enter metadata in JSON format"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Metadata (Optional)</label>
+                <Switch
+                  checked={showUpdateMetadata}
+                  onCheckedChange={setShowUpdateMetadata}
+                />
+              </div>
+              {showUpdateMetadata && (
+                <div className="grid gap-4">
+                  {Object.keys(formData.meta).map((key) => (
+                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        value={key}
+                        onChange={(e) => {
+                          const newKey = e.target.value;
+                          const value = formData.meta[key];
+                          setFormData(prev => {
+                            const newMeta = { ...prev.meta };
+                            delete newMeta[key];
+                            if (newKey) {
+                              newMeta[newKey] = value;
+                            }
+                            return { ...prev, meta: newMeta };
+                          });
+                        }}
+                        placeholder="key"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={typeof formData.meta[key] === 'string' ? formData.meta[key] : JSON.stringify(formData.meta[key])}
+                          onChange={(e) => {
+                            let value: any = e.target.value;
+                            // Try to parse as JSON if it looks like an object
+                            if (value.startsWith('{') || value.startsWith('[')) {
+                              try {
+                                value = JSON.parse(value);
+                              } catch {
+                                // Keep as string if parsing fails
+                              }
+                            }
+                            handleMetaChange(key, value);
+                          }}
+                          placeholder="value"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setFormData(prev => {
+                              const newMeta = { ...prev.meta };
+                              delete newMeta[key];
+                              return { ...prev, meta: newMeta };
+                            });
+                          }}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        meta: { ...prev.meta, "": "" }
+                      }));
+                    }}
+                  >
+                    Add Metadata Field
+                  </Button>
+                </div>
+              )}
             </div>
             <Button className="w-full" onClick={handleUpdateNamespace} disabled={isUpdating}>
               {isUpdating ? (

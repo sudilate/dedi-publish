@@ -58,11 +58,11 @@ export function HomePage() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="text-muted-foreground">99.9% Uptime</span>
+                <span className="text-muted-foreground">Secure</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="text-muted-foreground">24/7 Support</span>
+                <span className="text-muted-foreground">Verifiable</span>
               </div>
             </div>
           </div>
@@ -73,12 +73,12 @@ export function HomePage() {
       <section className="py-32 bg-white dark:bg-gray-950">
         <div className="container mx-auto px-4">
           <div className="text-center mb-20">
-            <Badge variant="outline" className="mb-4">Features</Badge>
+            <Badge variant="outline" className="mb-4">How It Works</Badge>
             <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400">
-              Everything you need
+              Your Data's Journey to Trust
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Built with the latest technologies to provide a secure and scalable solution for your directory management needs.
+              Transform scattered information into organized, verifiable, and discoverable data services. Follow our simple 3-step process to make your data work for you.
             </p>
           </div>
 
@@ -87,24 +87,24 @@ export function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader>
                 <Shield className="h-12 w-12 text-blue-600 dark:text-blue-400 mb-4" />
-                <CardTitle className="text-2xl">Security First</CardTitle>
+                <CardTitle className="text-2xl">1. Create Namespaces</CardTitle>
                 <CardDescription className="text-base">
-                  Enterprise-grade security with advanced encryption and protection.
+                  Start by creating namespaces - your project containers that organize all your data registries.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-4 text-sm text-muted-foreground">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Advanced encryption protocols
+                    Organize projects and teams
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Multi-factor authentication
+                    Set up DNS verification
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Regular security audits
+                    Manage access permissions
                   </li>
                 </ul>
               </CardContent>
@@ -114,24 +114,24 @@ export function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader>
                 <Users className="h-12 w-12 text-purple-600 dark:text-purple-400 mb-4" />
-                <CardTitle className="text-2xl">Team Management</CardTitle>
+                <CardTitle className="text-2xl">2. Define Registries</CardTitle>
                 <CardDescription className="text-base">
-                  Comprehensive tools for managing users and permissions.
+                  Create registries within namespaces to define data schemas and structure your information.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-4 text-sm text-muted-foreground">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Role-based access control
+                    Define custom data schemas
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Team collaboration tools
+                    Bulk upload capabilities
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Activity monitoring
+                    Archive and restore options
                   </li>
                 </ul>
               </CardContent>
@@ -141,24 +141,24 @@ export function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader>
                 <Zap className="h-12 w-12 text-orange-600 dark:text-orange-400 mb-4" />
-                <CardTitle className="text-2xl">Lightning Fast</CardTitle>
+                <CardTitle className="text-2xl">3. Manage Records</CardTitle>
                 <CardDescription className="text-base">
-                  Optimized performance for lightning-fast operations.
+                  Add and manage individual data records that conform to your registry schemas.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-4 text-sm text-muted-foreground">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Global CDN distribution
+                    Schema-validated data entries
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Optimized database queries
+                    Version control and history
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Real-time updates
+                    Query and lookup capabilities
                   </li>
                 </ul>
               </CardContent>

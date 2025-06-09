@@ -223,7 +223,7 @@ export function RecordDetailsPage() {
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
       
-      console.log('Update API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/update-record`);
+      // console.log('Update API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/update-record`);
       
       const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/update-record`, {
         method: 'POST',
@@ -232,7 +232,6 @@ export function RecordDetailsPage() {
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          new_record_name: updateFormData.new_record_name.trim(),
           description: updateFormData.description.trim(),
           details: updateFormData.details,
           meta: updateFormData.meta,
