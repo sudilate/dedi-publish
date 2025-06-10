@@ -797,7 +797,7 @@ export function NamespaceDetailsPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        // body: JSON.stringify({}),
+        body: JSON.stringify({}),
       });
 
       const result = await response.json();
@@ -1378,8 +1378,8 @@ export function NamespaceDetailsPage() {
               </div>
               {showCreateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(createFormData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(createFormData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
@@ -1495,8 +1495,8 @@ export function NamespaceDetailsPage() {
               </div>
               {showUpdateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(updateFormData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(updateFormData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {

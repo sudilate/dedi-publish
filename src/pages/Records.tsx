@@ -499,8 +499,8 @@ export function RecordsPage() {
               </div>
               {showAddMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(addFormData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(addFormData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
