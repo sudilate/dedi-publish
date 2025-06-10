@@ -124,7 +124,7 @@ export function RecordsPage() {
     try {
       console.log('🔄 Fetching records...');
       setLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}/${registryName}`, {
         method: 'GET',
         headers: {
@@ -221,7 +221,7 @@ export function RecordsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
       

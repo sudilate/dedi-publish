@@ -123,7 +123,7 @@ export function RecordDetailsPage() {
   const fetchRecordDetails = async () => {
     try {
       setRecordLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const encodedNamespace = namespaceId || '';
       const encodedRegistry = registryName || '';
@@ -218,7 +218,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -315,7 +315,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -383,7 +383,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -451,7 +451,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -519,7 +519,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
