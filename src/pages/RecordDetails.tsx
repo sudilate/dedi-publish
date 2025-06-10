@@ -638,12 +638,12 @@ export function RecordDetailsPage() {
         
         <Breadcrumb>
           <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink onClick={() => navigate('/dashboard')}>
+            {/* <BreadcrumbItem> */}
+              {/* <BreadcrumbLink onClick={() => navigate('/dashboard')}>
                 Dashboard
               </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
+            </BreadcrumbItem> */}
+            {/* <BreadcrumbSeparator /> */}
             <BreadcrumbItem>
               <BreadcrumbLink onClick={() => navigate(`/namespaces/${namespaceId}`)}>
                 {breadcrumbData?.namespace_name || 'Namespace'}
