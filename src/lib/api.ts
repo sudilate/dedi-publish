@@ -61,7 +61,7 @@ export const authApi = {
 export default api;
 
 // Get the API base URL from environment variable or use default
-const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
 
 export interface SignupRequest {
   username: string;

@@ -100,7 +100,7 @@ export function DashboardPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${creatorId}/get-namepace-by-creator`, {
         method: 'GET',
         headers: {
@@ -224,7 +224,7 @@ export function DashboardPage() {
         meta: meta
       };
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/create-namespace`, {
         method: 'POST',
         headers: {
@@ -321,7 +321,7 @@ export function DashboardPage() {
         meta: meta
       };
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${selectedNamespace.namespace_id}/update-namespace`, {
         method: 'POST',
         headers: {
