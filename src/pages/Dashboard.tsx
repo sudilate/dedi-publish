@@ -564,8 +564,8 @@ export function DashboardPage() {
               </div>
               {showCreateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(formData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(formData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
@@ -678,8 +678,8 @@ export function DashboardPage() {
               </div>
               {showUpdateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(formData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(formData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
