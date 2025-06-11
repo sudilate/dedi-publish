@@ -710,7 +710,7 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry has been revoked") {
+      if (response.ok ) {
         toast({
           title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" revoked successfully.`,
