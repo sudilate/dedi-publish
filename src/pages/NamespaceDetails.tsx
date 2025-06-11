@@ -1274,10 +1274,28 @@ export function NamespaceDetailsPage() {
               <Textarea
                 id="create-description"
                 value={createFormData.description}
-                onChange={(e) => setCreateFormData({ ...createFormData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setCreateFormData({ ...createFormData, description: value });
+                  }
+                }}
                 placeholder="Enter registry description"
                 rows={3}
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  createFormData.description.length > 180 
+                    ? 'text-red-500' 
+                    : createFormData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {createFormData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1441,10 +1459,28 @@ export function NamespaceDetailsPage() {
               <Textarea
                 id="update-description"
                 value={updateFormData.description}
-                onChange={(e) => setUpdateFormData({ ...updateFormData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setUpdateFormData({ ...updateFormData, description: value });
+                  }
+                }}
                 placeholder="Enter registry description"
                 rows={3}
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  updateFormData.description.length > 180 
+                    ? 'text-red-500' 
+                    : updateFormData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {updateFormData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
