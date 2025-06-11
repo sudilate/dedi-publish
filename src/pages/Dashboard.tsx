@@ -549,10 +549,28 @@ export function DashboardPage() {
               <label className="text-sm font-medium">Description *</label>
               <Textarea
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setFormData({ ...formData, description: value });
+                  }
+                }}
                 placeholder="Enter namespace description"
                 required
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  formData.description.length > 180 
+                    ? 'text-red-500' 
+                    : formData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {formData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -664,9 +682,27 @@ export function DashboardPage() {
               <label className="text-sm font-medium">Description</label>
               <Textarea
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setFormData({ ...formData, description: value });
+                  }
+                }}
                 placeholder="Enter namespace description"
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  formData.description.length > 180 
+                    ? 'text-red-500' 
+                    : formData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {formData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
