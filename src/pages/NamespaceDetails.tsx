@@ -587,27 +587,18 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry archived successfully") {
-        // Update local state immediately to show archived status
-        setRegistries(prevRegistries => 
-          prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_archived: true }
-              : registry
-          )
-        );
-
+      if (response.ok && result.message === "Registry has been archived") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" archived successfully.`,
-          // Ensure default variant (not destructive) for success
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
         toast({
-          title: 'Archive Error', // More specific title
+          title: 'Archive Error',
           description: result.message || 'Failed to archive registry',
           variant: 'destructive',
         });
@@ -657,33 +648,19 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry restored successfully") {
-        console.log('🔄 Restore successful, updating local state for registry:', selectedRegistry.registry_id);
-        
-        // Update local state immediately to remove archived status
-        setRegistries(prevRegistries => {
-          const updatedRegistries = prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_archived: false }
-              : registry
-          );
-          console.log('📊 Updated registries state:', updatedRegistries.find(r => r.registry_id === selectedRegistry.registry_id));
-          return updatedRegistries;
-        });
-
+      if (response.ok && result.message === "Registry has been restored") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" restored successfully.`,
-           // Ensure default variant (not destructive) for success
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
-        // Handle specific 500 error from server or other non-ok responses
         const errorMessage = result.message || (response.status === 500 ? 'Internal Server Error' : 'Failed to restore registry');
         toast({
-          title: 'Restore Error', // More specific title
+          title: 'Restore Error',
           description: errorMessage,
           variant: 'destructive',
         });
@@ -733,23 +710,15 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry revoked successfully") {
-        // Update local state immediately to show revoked status
-        setRegistries(prevRegistries => 
-          prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_revoked: true }
-              : registry
-          )
-        );
-
+      if (response.ok && result.message === "Registry has been revoked") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" revoked successfully.`,
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
         toast({
           title: 'Revoke Error',
@@ -802,23 +771,15 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry reinstated successfully") {
-        // Update local state immediately to remove revoked status
-        setRegistries(prevRegistries => 
-          prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_revoked: false }
-              : registry
-          )
-        );
-
+      if (response.ok && result.message === "Registry has been reinstated") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" reinstated successfully.`,
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
         toast({
           title: 'Reinstate Error',
