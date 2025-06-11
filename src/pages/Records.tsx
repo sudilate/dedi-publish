@@ -460,10 +460,28 @@ export function RecordsPage() {
                   <Textarea
                     id="add-description"
                     value={addFormData.description}
-                    onChange={(e) => setAddFormData(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length <= 200) {
+                        setAddFormData(prev => ({ ...prev, description: value }));
+                      }
+                    }}
                     placeholder="Enter record description"
                     rows={3}
+                    maxLength={200}
                   />
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground">Maximum 200 characters</span>
+                    <span className={`${
+                      addFormData.description.length > 180 
+                        ? 'text-red-500' 
+                        : addFormData.description.length > 160 
+                        ? 'text-yellow-500' 
+                        : 'text-muted-foreground'
+                    }`}>
+                      {addFormData.description.length}/200
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
