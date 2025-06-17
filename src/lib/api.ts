@@ -68,12 +68,12 @@ export interface SignupRequest {
   firstname: string;
   lastname: string;
   email: string;
-  password: string;
+  hashed_password: string;
 }
 
 export interface LoginRequest {
   email: string;
-  password: string;
+  hashed_password: string;
 }
 
 export interface ApiResponse<T> {
@@ -94,12 +94,19 @@ export interface User {
 // Signup API call
 export async function signupUser(userData: SignupRequest): Promise<ApiResponse<User | string>> {
   try {
+    const { username, firstname, lastname, email, hashed_password } = userData;
     const response = await fetch(`${API_BASE_URL}/dedi/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(userData),
+      body: JSON.stringify({
+        username,
+        firstname,
+        lastname,
+        email,
+        hashed_password: hashed_password,
+      }),
     });
 
     const result = await response.json();
@@ -128,13 +135,13 @@ export async function signupUser(userData: SignupRequest): Promise<ApiResponse<U
 // Login API call (endpoint to be provided later)
 export async function loginUser(credentials: LoginRequest): Promise<ApiResponse<User | string>> {
   try {
-    // TODO: Replace with actual login endpoint when provided
+    const { email, hashed_password } = credentials;
     const response = await fetch(`${API_BASE_URL}/dedi/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(credentials),
+      body: JSON.stringify({ email, hashed_password: hashed_password }),
     });
 
     const result = await response.json();

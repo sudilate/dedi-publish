@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { blake2bHex } from 'blakejs';
 import { signupUser, loginUser, SignupRequest, LoginRequest } from './api';
 
 // JWT decoder function
@@ -100,10 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Login function using actual API
   const login = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
     try {
-      const credentials: LoginRequest = { email, password };
-      const response = await loginUser(credentials);
-      
+      const hashedPassword = blake2bHex(password, undefined, 32);
+      const response = await loginUser({ email, hashed_password: hashedPassword });
+
       console.log('Full login API response:', response);
       console.log('Response message:', response.message);
       console.log('Response data:', response.data);
@@ -170,6 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Re-throw the error so it can be handled by the UI
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -181,16 +186,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string;
     password: string;
   }): Promise<boolean> => {
+    setIsLoading(true);
     try {
-      const signupData: SignupRequest = {
+      const hashedPassword = blake2bHex(userData.password, undefined, 32);
+
+      const response = await signupUser({
         username: userData.username,
         firstname: userData.firstName,
         lastname: userData.lastName,
         email: userData.email,
-        password: userData.password,
-      };
-      
-      const response = await signupUser(signupData);
+        hashed_password: hashedPassword,
+      });
       
       // Check for various success messages that might be returned by the API
       const successMessages = [
@@ -202,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "success"
       ];
       
-            if (response.message && successMessages.some(msg => 
+      if (response.message && successMessages.some(msg => 
         response.message.toLowerCase().includes(msg.toLowerCase()) || 
         msg.toLowerCase().includes(response.message.toLowerCase())
       )) {
@@ -221,6 +227,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Re-throw the error so it can be handled by the UI
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 

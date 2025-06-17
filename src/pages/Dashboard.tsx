@@ -101,7 +101,7 @@ export function DashboardPage() {
       }
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      const response = await fetch(`${API_BASE_URL}/dedi/${creatorId}/get-namepace-by-creator`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/${creatorId}/get-namespace-by-creator`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
