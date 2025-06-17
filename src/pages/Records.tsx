@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Eye } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Eye, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -39,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface RecordDetails {
   [key: string]: string | number;
@@ -509,7 +510,33 @@ export function RecordsPage() {
             {/* Metadata */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+                <div className='flex items-center gap-2'>
+                  <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showAddMetadata}
                   onCheckedChange={setShowAddMetadata}
