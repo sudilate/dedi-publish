@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle } from 'lucide-react';
+import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Interface for breadcrumb API response
 interface BreadcrumbApiResponse {
@@ -956,10 +957,36 @@ export function RecordDetailsPage() {
 
             {/* Metadata */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+              <div className="flex items-center gap-2">
+                <Label>Metadata (Optional)</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="max-w-xs p-2 text-sm">
+                        <p className="font-bold">Customizable Metadata</p>
+                        <p className="my-2">
+                          These are the customizable fields where you can define your own data types as per your application needs.
+                        </p>
+                        <p className="font-semibold">Example:</p>
+                        <div className="ml-2">
+                          <p>
+                            <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                          </p>
+                        </div>
+                        <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div className="grid gap-4">
-                {Object.keys(updateFormData.meta).map((key) => (
-                  <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {Object.keys(updateFormData.meta).map((key, index) => (
+                  <div key={index} className="flex gap-2 items-center">
                     <Input
                       value={key}
                       onChange={(e) => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Check, AlertCircle, MoreVertical, Copy } from 'lucide-react';
+import { Plus, Check, AlertCircle, MoreVertical, Copy, Info } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Interface for namespace data from API
 interface Namespace {
@@ -574,7 +575,34 @@ export function DashboardPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Metadata (Optional)</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                            
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                            </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showCreateMetadata}
                   onCheckedChange={setShowCreateMetadata}
@@ -706,7 +734,33 @@ export function DashboardPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Metadata (Optional)</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showUpdateMetadata}
                   onCheckedChange={setShowUpdateMetadata}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle, X } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle, X, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -47,6 +47,7 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Updated interface to match API response
 interface Registry {
@@ -346,11 +347,11 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      // Convert schema fields to JSON format
-      const parsedSchema: { [key: string]: string } = {};
-      validSchemaFields.forEach(field => {
-        parsedSchema[field.key.trim()] = field.type;
-      });
+      // Convert schema fields to an object with string keys and string values.
+      const parsedSchema = validSchemaFields.reduce((acc, field) => {
+        acc[field.key.trim()] = String(field.type);
+        return acc;
+      }, {} as { [key: string]: string });
 
       // Parse metadata (optional)
       let parsedMeta = {};
@@ -1328,7 +1329,7 @@ export function NamespaceDetailsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="string">string</SelectItem>
-                        <SelectItem value="int">int</SelectItem>
+                        <SelectItem value="integer">integer</SelectItem>
                         <SelectItem value="float">float</SelectItem>
                         <SelectItem value="bool">bool</SelectItem>
                       </SelectContent>
@@ -1349,7 +1350,33 @@ export function NamespaceDetailsPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="create-metadata">Metadata (optional)</Label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showCreateMetadata}
                   onCheckedChange={setShowCreateMetadata}
@@ -1484,7 +1511,33 @@ export function NamespaceDetailsPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="update-metadata">Metadata (optional)</Label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showUpdateMetadata}
                   onCheckedChange={setShowUpdateMetadata}
