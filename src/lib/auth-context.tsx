@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { blake2bHex } from 'blakejs';
-import { signupUser, loginUser, SignupRequest, LoginRequest } from './api';
+import { signupUser, loginUser } from './api';
 
 // JWT decoder function
 function decodeJWT(token: string) {
