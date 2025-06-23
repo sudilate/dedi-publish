@@ -444,7 +444,7 @@ export function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Your Namespaces</h1>
         <p className="text-muted-foreground mt-2">
-          Manage and organize your projects in dedicated namespaces
+          Manage and organize your projects in dedicated namespaces ({namespaces.length} total namespaces)
         </p>
       </div>
 
@@ -485,9 +485,23 @@ export function DashboardPage() {
                       Update
                     </DropdownMenuItem>
                     {!namespace.dnsTxt && (
-                      <DropdownMenuItem onClick={() => handleGenerateDnsTxt(namespace)}>
-                        Generate DNS txt
-                      </DropdownMenuItem>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <DropdownMenuItem 
+                                disabled
+                                className="cursor-not-allowed opacity-50"
+                              >
+                                Generate DNS txt
+                              </DropdownMenuItem>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Feature coming in next version</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -499,6 +513,9 @@ export function DashboardPage() {
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Updated: {new Date(namespace.updated_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Registries: {namespace.registry_count || 0}
                   </p>
                 </div>
                 <div className="mt-4 flex justify-end">
@@ -512,16 +529,25 @@ export function DashboardPage() {
                       <Check className="h-4 w-4" />
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleVerify(namespace.namespace_id);
-                      }}
-                    >
-                      Verify
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="cursor-not-allowed"
+                            >
+                              Verify
+                            </Button>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Feature coming in next version</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
               </CardContent>
@@ -541,10 +567,16 @@ export function DashboardPage() {
               <label className="text-sm font-medium">Name *</label>
               <Input
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter namespace name"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow alphanumeric characters, hyphens, and underscores
+                  const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                  setFormData({ ...formData, name: filteredValue });
+                }}
+                placeholder="Enter namespace name (alphanumeric, _, - only)"
                 required
               />
+              <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Description *</label>
@@ -702,9 +734,15 @@ export function DashboardPage() {
               <label className="text-sm font-medium">Name</label>
               <Input
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter namespace name"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow alphanumeric characters, hyphens, and underscores
+                  const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                  setFormData({ ...formData, name: filteredValue });
+                }}
+                placeholder="Enter namespace name (alphanumeric, _, - only)"
               />
+              <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Description</label>
