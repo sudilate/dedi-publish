@@ -369,19 +369,7 @@ export function DashboardPage() {
     }
   };
 
-  const handleVerify = (namespaceId: string) => {
-    setNamespaces(namespaces.map(ns => 
-      ns.namespace_id === namespaceId ? { ...ns, verified: true } : ns
-    ));
-  };
 
-  const handleGenerateDnsTxt = (namespace: Namespace) => {
-    setSelectedNamespace({
-      ...namespace,
-      dnsTxt: Math.random().toString(36).substring(7)
-    });
-    setIsDnsTxtModalOpen(true);
-  };
 
   const handleCopyDnsTxt = () => {
     if (selectedNamespace?.dnsTxt) {

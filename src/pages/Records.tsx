@@ -292,21 +292,7 @@ export function RecordsPage() {
     }));
   };
 
-  const handleBulkUpload = async () => {
-    try {
-      console.log('Starting bulk upload...');
-      toast({
-        title: 'Success',
-        description: 'Bulk upload completed successfully',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to upload records',
-        variant: 'destructive',
-      });
-    }
-  };
+
 
   // Get column headers from schema plus the record name column
   const getColumnHeaders = () => {

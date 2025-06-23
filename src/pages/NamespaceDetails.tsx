@@ -605,11 +605,6 @@ export function NamespaceDetailsPage() {
     }
   };
 
-  const handleOpenDelegateModal = (registry: Registry) => {
-    setSelectedRegistry(registry);
-    setIsDelegateModalOpen(true);
-  };
-
   const handleDelegateRegistry = async () => {
     if (!selectedRegistry) return;
     try {
