@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle, Info } from 'lucide-react';
+import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle, Info, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -94,6 +94,50 @@ interface UpdateRecordFormData {
   details: { [key: string]: string };
   meta: { [key: string]: string };
 }
+
+// Utility function to trim long values (first 7 chars + ... + last 5 chars)
+const trimValue = (value: string, firstChars: number = 7, lastChars: number = 5): string => {
+  if (!value || value.length <= firstChars + lastChars + 3) {
+    return value;
+  }
+  return `${value.substring(0, firstChars)}...${value.substring(value.length - lastChars)}`;
+};
+
+// Component for displaying trimmed value with copy button
+const TrimmedValueWithCopy = ({ label, value, className = "" }: { label: string; value: string; className?: string }) => {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+
+  return (
+    <div className={className}>
+      <h3 className="font-medium text-sm text-muted-foreground">{label}</h3>
+      <div className="flex items-center">
+        <p className="text-sm font-mono break-all">{trimValue(value)}</p>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 ml-1 shrink-0"
+          onClick={handleCopy}
+          title={`Copy ${label.toLowerCase()}`}
+        >
+          <Copy className="h-3 w-3" />
+        </Button>
+      </div>
+      {copied && (
+        <p className="text-xs text-green-600 mt-1">Copied!</p>
+      )}
+    </div>
+  );
+};
 
 export function RecordDetailsPage() {
   const { namespaceId, registryName, recordName } = useParams();
@@ -745,14 +789,14 @@ export function RecordDetailsPage() {
                   <h3 className="font-medium text-sm text-muted-foreground">Record ID</h3>
                   <p className="text-sm font-mono break-all">{recordDetails.record_id}</p>
                 </div>
-                <div>
-                  <h3 className="font-medium text-sm text-muted-foreground">Digest</h3>
-                  <p className="text-sm font-mono break-all">{recordDetails.digest}</p>
-                </div>
-                <div>
-                  <h3 className="font-medium text-sm text-muted-foreground">Version</h3>
-                  <p className="text-sm font-mono break-all">{recordDetails.version}</p>
-                </div>
+                <TrimmedValueWithCopy 
+                  label="Digest" 
+                  value={recordDetails.digest} 
+                />
+                <TrimmedValueWithCopy 
+                  label="Version" 
+                  value={recordDetails.version} 
+                />
                 <div>
                   <h3 className="font-medium text-sm text-muted-foreground">Version Count</h3>
                   <p className="text-sm">{recordDetails.version_count}</p>

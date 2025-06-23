@@ -1,10 +1,127 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Shield, Users, Zap, CheckCircle2, ArrowUpRight } from 'lucide-react';
+import { ArrowRight, Shield, Users, Zap, CheckCircle2, ArrowUpRight, TrendingUp, Database, FileText, Activity, BarChart3, PieChart, Users2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth-context';
 import React from 'react';
+
+// Types for statistics
+interface StatCardProps {
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  trend?: string;
+  color?: string;
+}
+
+interface GrowthData {
+  month: string;
+  count: number;
+}
+
+interface RegistryType {
+  type: string;
+  count: number;
+  color: string;
+  percentage: number;
+}
+
+// Dummy data for statistics
+const platformStats = {
+  totalNamespaces: 12847,
+  totalRegistries: 45632,
+  totalRecords: 2847392,
+  activeUsers: 8934,
+  dataProcessed: "847.2TB",
+  uptime: 99.97
+};
+
+const namespaceGrowth: GrowthData[] = [
+  { month: 'Jan', count: 8420 },
+  { month: 'Feb', count: 9150 },
+  { month: 'Mar', count: 9890 },
+  { month: 'Apr', count: 10650 },
+  { month: 'May', count: 11420 },
+  { month: 'Jun', count: 12847 }
+];
+
+const registryTypes: RegistryType[] = [
+  { type: 'Healthcare', count: 12847, color: 'bg-blue-500', percentage: 28 },
+  { type: 'Finance', count: 10234, color: 'bg-green-500', percentage: 22 },
+  { type: 'Supply Chain', count: 9876, color: 'bg-purple-500', percentage: 22 },
+  { type: 'Education', count: 7543, color: 'bg-orange-500', percentage: 17 },
+  { type: 'Government', count: 5132, color: 'bg-red-500', percentage: 11 }
+];
+
+const StatCard = ({ title, value, subtitle, icon: Icon, trend, color = "text-blue-600" }: StatCardProps) => (
+  <Card className="relative overflow-hidden group hover:shadow-lg transition-all duration-300">
+    <div className={`absolute top-0 left-0 w-full h-1 ${color.replace('text-', 'bg-')}`} />
+    <CardContent className="p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <p className="text-3xl font-bold mt-1">{value}</p>
+          {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+        </div>
+        <div className={`p-3 rounded-full bg-gray-100 dark:bg-gray-800 ${color} group-hover:scale-110 transition-transform`}>
+          <Icon className="h-6 w-6" />
+        </div>
+      </div>
+      {trend && (
+        <div className="flex items-center mt-4 text-sm">
+          <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+          <span className="text-green-600 font-medium">{trend}</span>
+          <span className="text-muted-foreground ml-1">vs last month</span>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+);
+
+interface MiniBarChartProps {
+  data: GrowthData[];
+  height?: number;
+}
+
+interface TypeDistributionProps {
+  data: RegistryType[];
+}
+
+const MiniBarChart = ({ data, height = 60 }: MiniBarChartProps) => (
+  <div className="flex items-end space-x-1" style={{ height }}>
+    {data.map((item, index) => (
+      <div key={index} className="flex-1 flex flex-col items-center">
+        <div 
+          className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t-sm transition-all duration-500 hover:from-blue-600 hover:to-blue-400"
+          style={{ height: `${(item.count / Math.max(...data.map(d => d.count))) * 100}%` }}
+        />
+        <span className="text-xs text-muted-foreground mt-1">{item.month}</span>
+      </div>
+    ))}
+  </div>
+);
+
+const TypeDistribution = ({ data }: TypeDistributionProps) => (
+  <div className="space-y-4">
+    {data.map((item, index) => (
+      <div key={index} className="space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="text-sm font-medium">{item.type}</span>
+          <span className="text-sm text-muted-foreground">{item.count.toLocaleString()}</span>
+        </div>
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div 
+            className={`h-2 rounded-full ${item.color} transition-all duration-700`}
+            style={{ width: `${item.percentage}%` }}
+          />
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -65,6 +182,153 @@ export function HomePage() {
                 <span className="text-muted-foreground">Verifiable</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Statistics Section */}
+      <section className="py-24 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge variant="outline" className="mb-4">
+              <Activity className="h-4 w-4 mr-2" />
+              Platform Statistics
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400">
+              Powering Data Transformation Globally
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Join thousands of organizations already transforming their data into trusted, verifiable services with DeDi.
+            </p>
+          </div>
+
+          {/* Main Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <StatCard 
+              title="Total Namespaces" 
+              value={platformStats.totalNamespaces.toLocaleString()} 
+              subtitle="Active projects"
+              icon={Database}
+              trend="+12.5%"
+              color="text-blue-600"
+            />
+            <StatCard 
+              title="Registries Created" 
+              value={platformStats.totalRegistries.toLocaleString()} 
+              subtitle="Data schemas"
+              icon={BarChart3}
+              trend="+18.3%"
+              color="text-green-600"
+            />
+            <StatCard 
+              title="Records Managed" 
+              value={`${(platformStats.totalRecords / 1000000).toFixed(1)}M`} 
+              subtitle="Data entries"
+              icon={FileText}
+              trend="+24.7%"
+              color="text-purple-600"
+            />
+            <StatCard 
+              title="Active Users" 
+              value={platformStats.activeUsers.toLocaleString()} 
+              subtitle="Trusted by"
+              icon={Users2}
+              trend="+8.9%"
+              color="text-orange-600"
+            />
+          </div>
+
+          {/* Detailed Analytics */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Namespace Growth Chart */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                      Namespace Growth Trend
+                    </CardTitle>
+                    <CardDescription>Monthly namespace creation over the last 6 months</CardDescription>
+                  </div>
+                  <Badge variant="secondary" className="text-green-600">
+                    +52.5% Growth
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <MiniBarChart data={namespaceGrowth} height={120} />
+                  <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">52.5%</p>
+                      <p className="text-sm text-muted-foreground">Growth Rate</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-600">4,427</p>
+                      <p className="text-sm text-muted-foreground">New This Month</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-purple-600">99.2%</p>
+                      <p className="text-sm text-muted-foreground">Success Rate</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Registry Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-purple-600" />
+                  Registry by Industry
+                </CardTitle>
+                <CardDescription>Distribution across different sectors</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TypeDistribution data={registryTypes} />
+                <div className="mt-6 pt-4 border-t">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Total Industries</span>
+                    <span className="font-semibold">15+ Sectors</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Performance Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+            <Card className="text-center">
+              <CardContent className="p-6">
+                <div className="text-3xl font-bold text-green-600 mb-2">{platformStats.uptime}%</div>
+                <p className="text-sm text-muted-foreground mb-4">System Uptime</p>
+                <Progress value={platformStats.uptime} className="h-2" />
+              </CardContent>
+            </Card>
+            
+            <Card className="text-center">
+              <CardContent className="p-6">
+                <div className="text-3xl font-bold text-blue-600 mb-2">{platformStats.dataProcessed}</div>
+                <p className="text-sm text-muted-foreground mb-4">Data Processed</p>
+                <div className="flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-blue-600 mr-2" />
+                  <span className="text-sm text-green-600">+15.2% this month</span>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="text-center">
+              <CardContent className="p-6">
+                <div className="text-3xl font-bold text-purple-600 mb-2">&lt;50ms</div>
+                <p className="text-sm text-muted-foreground mb-4">Average Response Time</p>
+                <div className="flex items-center justify-center">
+                  <Zap className="h-4 w-4 text-purple-600 mr-2" />
+                  <span className="text-sm text-green-600">Optimized Performance</span>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
