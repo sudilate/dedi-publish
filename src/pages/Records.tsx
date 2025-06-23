@@ -292,21 +292,7 @@ export function RecordsPage() {
     }));
   };
 
-  const handleBulkUpload = async () => {
-    try {
-      console.log('Starting bulk upload...');
-      toast({
-        title: 'Success',
-        description: 'Bulk upload completed successfully',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to upload records',
-        variant: 'destructive',
-      });
-    }
-  };
+
 
   // Get column headers from schema plus the record name column
   const getColumnHeaders = () => {
@@ -361,10 +347,25 @@ export function RecordsPage() {
           <Plus className="mr-2 h-4 w-4" />
           Add Record
         </Button>
-        <Button variant="outline" onClick={handleBulkUpload} className="px-8 py-6 text-lg">
-          <Upload className="mr-2 h-4 w-4" />
-          Bulk Upload
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <Button 
+                  variant="outline" 
+                  disabled
+                  className="px-8 py-6 text-lg cursor-not-allowed opacity-50"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Bulk Upload
+                </Button>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Feature coming in next version</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {records.length === 0 ? (
@@ -452,9 +453,15 @@ export function RecordsPage() {
                   <Input
                     id="add-record-name"
                     value={addFormData.record_name}
-                    onChange={(e) => setAddFormData(prev => ({ ...prev, record_name: e.target.value }))}
-                    placeholder="Enter record name"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow alphanumeric characters, hyphens, and underscores
+                      const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                      setAddFormData(prev => ({ ...prev, record_name: filteredValue }));
+                    }}
+                    placeholder="Enter record name (alphanumeric, _, - only)"
                   />
+                  <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="add-description">Description *</Label>
