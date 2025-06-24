@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Check, AlertCircle, MoreVertical, Copy } from 'lucide-react';
+import { Plus, Check, AlertCircle, MoreVertical, Copy, Info } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Interface for namespace data from API
 interface Namespace {
@@ -100,8 +101,8 @@ export function DashboardPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
-      const response = await fetch(`${API_BASE_URL}/dedi/${creatorId}/get-namepace-by-creator`, {
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
+      const response = await fetch(`${API_BASE_URL}/dedi/${creatorId}/get-namespace-by-creator`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -224,7 +225,7 @@ export function DashboardPage() {
         meta: meta
       };
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/create-namespace`, {
         method: 'POST',
         headers: {
@@ -321,7 +322,7 @@ export function DashboardPage() {
         meta: meta
       };
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${selectedNamespace.namespace_id}/update-namespace`, {
         method: 'POST',
         headers: {
@@ -368,19 +369,7 @@ export function DashboardPage() {
     }
   };
 
-  const handleVerify = (namespaceId: string) => {
-    setNamespaces(namespaces.map(ns => 
-      ns.namespace_id === namespaceId ? { ...ns, verified: true } : ns
-    ));
-  };
 
-  const handleGenerateDnsTxt = (namespace: Namespace) => {
-    setSelectedNamespace({
-      ...namespace,
-      dnsTxt: Math.random().toString(36).substring(7)
-    });
-    setIsDnsTxtModalOpen(true);
-  };
 
   const handleCopyDnsTxt = () => {
     if (selectedNamespace?.dnsTxt) {
@@ -443,7 +432,7 @@ export function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Your Namespaces</h1>
         <p className="text-muted-foreground mt-2">
-          Manage and organize your projects in dedicated namespaces
+          Manage and organize your projects in dedicated namespaces ({namespaces.length} total namespaces)
         </p>
       </div>
 
@@ -484,9 +473,23 @@ export function DashboardPage() {
                       Update
                     </DropdownMenuItem>
                     {!namespace.dnsTxt && (
-                      <DropdownMenuItem onClick={() => handleGenerateDnsTxt(namespace)}>
-                        Generate DNS txt
-                      </DropdownMenuItem>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <DropdownMenuItem 
+                                disabled
+                                className="cursor-not-allowed opacity-50"
+                              >
+                                Generate DNS txt
+                              </DropdownMenuItem>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Feature coming in next version</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -498,6 +501,9 @@ export function DashboardPage() {
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Updated: {new Date(namespace.updated_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Registries: {namespace.registry_count || 0}
                   </p>
                 </div>
                 <div className="mt-4 flex justify-end">
@@ -511,16 +517,25 @@ export function DashboardPage() {
                       <Check className="h-4 w-4" />
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleVerify(namespace.namespace_id);
-                      }}
-                    >
-                      Verify
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="cursor-not-allowed"
+                            >
+                              Verify
+                            </Button>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Feature coming in next version</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
               </CardContent>
@@ -540,23 +555,74 @@ export function DashboardPage() {
               <label className="text-sm font-medium">Name *</label>
               <Input
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter namespace name"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow alphanumeric characters, hyphens, and underscores
+                  const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                  setFormData({ ...formData, name: filteredValue });
+                }}
+                placeholder="Enter namespace name (alphanumeric, _, - only)"
                 required
               />
+              <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Description *</label>
               <Textarea
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setFormData({ ...formData, description: value });
+                  }
+                }}
                 placeholder="Enter namespace description"
                 required
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  formData.description.length > 180 
+                    ? 'text-red-500' 
+                    : formData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {formData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Metadata (Optional)</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                            
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                            </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showCreateMetadata}
                   onCheckedChange={setShowCreateMetadata}
@@ -564,8 +630,8 @@ export function DashboardPage() {
               </div>
               {showCreateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(formData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(formData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
@@ -656,21 +722,71 @@ export function DashboardPage() {
               <label className="text-sm font-medium">Name</label>
               <Input
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter namespace name"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow alphanumeric characters, hyphens, and underscores
+                  const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                  setFormData({ ...formData, name: filteredValue });
+                }}
+                placeholder="Enter namespace name (alphanumeric, _, - only)"
               />
+              <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Description</label>
               <Textarea
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setFormData({ ...formData, description: value });
+                  }
+                }}
                 placeholder="Enter namespace description"
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  formData.description.length > 180 
+                    ? 'text-red-500' 
+                    : formData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {formData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Metadata (Optional)</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showUpdateMetadata}
                   onCheckedChange={setShowUpdateMetadata}
@@ -678,8 +794,8 @@ export function DashboardPage() {
               </div>
               {showUpdateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(formData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(formData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {

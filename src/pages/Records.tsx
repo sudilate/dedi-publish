@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Eye } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Eye, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -39,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface RecordDetails {
   [key: string]: string | number;
@@ -124,7 +125,7 @@ export function RecordsPage() {
     try {
       console.log('🔄 Fetching records...');
       setLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}/${registryName}`, {
         method: 'GET',
         headers: {
@@ -221,7 +222,7 @@ export function RecordsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
       
@@ -291,21 +292,7 @@ export function RecordsPage() {
     }));
   };
 
-  const handleBulkUpload = async () => {
-    try {
-      console.log('Starting bulk upload...');
-      toast({
-        title: 'Success',
-        description: 'Bulk upload completed successfully',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to upload records',
-        variant: 'destructive',
-      });
-    }
-  };
+
 
   // Get column headers from schema plus the record name column
   const getColumnHeaders = () => {
@@ -360,10 +347,25 @@ export function RecordsPage() {
           <Plus className="mr-2 h-4 w-4" />
           Add Record
         </Button>
-        <Button variant="outline" onClick={handleBulkUpload} className="px-8 py-6 text-lg">
-          <Upload className="mr-2 h-4 w-4" />
-          Bulk Upload
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <Button 
+                  variant="outline" 
+                  disabled
+                  className="px-8 py-6 text-lg cursor-not-allowed opacity-50"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Bulk Upload
+                </Button>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Feature coming in next version</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {records.length === 0 ? (
@@ -451,19 +453,43 @@ export function RecordsPage() {
                   <Input
                     id="add-record-name"
                     value={addFormData.record_name}
-                    onChange={(e) => setAddFormData(prev => ({ ...prev, record_name: e.target.value }))}
-                    placeholder="Enter record name"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow alphanumeric characters, hyphens, and underscores
+                      const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                      setAddFormData(prev => ({ ...prev, record_name: filteredValue }));
+                    }}
+                    placeholder="Enter record name (alphanumeric, _, - only)"
                   />
+                  <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="add-description">Description *</Label>
                   <Textarea
                     id="add-description"
                     value={addFormData.description}
-                    onChange={(e) => setAddFormData(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length <= 200) {
+                        setAddFormData(prev => ({ ...prev, description: value }));
+                      }
+                    }}
                     placeholder="Enter record description"
                     rows={3}
+                    maxLength={200}
                   />
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground">Maximum 200 characters</span>
+                    <span className={`${
+                      addFormData.description.length > 180 
+                        ? 'text-red-500' 
+                        : addFormData.description.length > 160 
+                        ? 'text-yellow-500' 
+                        : 'text-muted-foreground'
+                    }`}>
+                      {addFormData.description.length}/200
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -491,7 +517,33 @@ export function RecordsPage() {
             {/* Metadata */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+                <div className='flex items-center gap-2'>
+                  <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showAddMetadata}
                   onCheckedChange={setShowAddMetadata}
@@ -499,8 +551,8 @@ export function RecordsPage() {
               </div>
               {showAddMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(addFormData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(addFormData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {

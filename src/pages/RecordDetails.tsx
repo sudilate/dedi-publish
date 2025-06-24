@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle } from 'lucide-react';
+import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle, Info, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -32,6 +32,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -41,6 +48,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Interface for breadcrumb API response
 interface BreadcrumbApiResponse {
@@ -81,11 +89,55 @@ interface RecordDetailsApiResponse {
 
 // Interface for update record form data
 interface UpdateRecordFormData {
-  new_record_name: string;
+  // new_record_name: string;
   description: string;
   details: { [key: string]: string };
   meta: { [key: string]: string };
 }
+
+// Utility function to trim long values (first 7 chars + ... + last 5 chars)
+const trimValue = (value: string, firstChars: number = 7, lastChars: number = 5): string => {
+  if (!value || value.length <= firstChars + lastChars + 3) {
+    return value;
+  }
+  return `${value.substring(0, firstChars)}...${value.substring(value.length - lastChars)}`;
+};
+
+// Component for displaying trimmed value with copy button
+const TrimmedValueWithCopy = ({ label, value, className = "" }: { label: string; value: string; className?: string }) => {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+
+  return (
+    <div className={className}>
+      <h3 className="font-medium text-sm text-muted-foreground">{label}</h3>
+      <div className="flex items-center">
+        <p className="text-sm font-mono break-all">{trimValue(value)}</p>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 ml-1 shrink-0"
+          onClick={handleCopy}
+          title={`Copy ${label.toLowerCase()}`}
+        >
+          <Copy className="h-3 w-3" />
+        </Button>
+      </div>
+      {copied && (
+        <p className="text-xs text-green-600 mt-1">Copied!</p>
+      )}
+    </div>
+  );
+};
 
 export function RecordDetailsPage() {
   const { namespaceId, registryName, recordName } = useParams();
@@ -108,7 +160,7 @@ export function RecordDetailsPage() {
   const [reinstateLoading, setReinstateLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateFormData, setUpdateFormData] = useState<UpdateRecordFormData>({
-    new_record_name: '',
+    // new_record_name: '',
     description: '',
     details: {},
     meta: {},
@@ -123,7 +175,7 @@ export function RecordDetailsPage() {
   const fetchRecordDetails = async () => {
     try {
       setRecordLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const encodedNamespace = namespaceId || '';
       const encodedRegistry = registryName || '';
@@ -174,7 +226,7 @@ export function RecordDetailsPage() {
     
     // Populate form with current record data
     setUpdateFormData({
-      new_record_name: recordDetails.record_name,
+      // new_record_name: recordDetails.record_name,
       description: recordDetails.description,
       details: { ...recordDetails.details },
       meta: recordDetails.meta && typeof recordDetails.meta === 'object' ? { ...recordDetails.meta } : {},
@@ -189,15 +241,6 @@ export function RecordDetailsPage() {
       setUpdateLoading(true);
       
       // Validate required fields
-      if (!updateFormData.new_record_name.trim()) {
-        toast({
-          title: 'Validation Error',
-          description: 'Record name is required',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       if (!updateFormData.description.trim()) {
         toast({
           title: 'Validation Error',
@@ -218,24 +261,63 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      // Convert details based on schema types
+      const typedDetails: { [key: string]: any } = {};
+      if (recordDetails) {
+        Object.keys(recordDetails.schema).forEach(field => {
+          const value = updateFormData.details[field];
+          const type = recordDetails.schema[field];
+          
+          if (value !== undefined && value !== '') {
+            switch (type.toLowerCase()) {
+              case 'integer':
+              case 'int':
+                const intValue = parseInt(value, 10);
+                if (!isNaN(intValue)) {
+                  typedDetails[field] = intValue;
+                }
+                break;
+              case 'float':
+              case 'double':
+              case 'number':
+                const floatValue = parseFloat(value);
+                if (!isNaN(floatValue)) {
+                  typedDetails[field] = floatValue;
+                }
+                break;
+              case 'boolean':
+              case 'bool':
+                typedDetails[field] = value === 'true' || value === '1';
+                break;
+              case 'string':
+              default:
+                typedDetails[field] = value;
+                break;
+            }
+          }
+        });
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
       
-      // console.log('Update API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/update-record`);
+      const requestBody = {
+        description: updateFormData.description.trim(),
+        details: typedDetails,
+        ...(Object.keys(updateFormData.meta).length > 0 && { meta: updateFormData.meta }),
+      };
+
+      console.log('Update request body:', requestBody);
       
-      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/update-record`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${recordName}/update-record`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          description: updateFormData.description.trim(),
-          details: updateFormData.details,
-          meta: updateFormData.meta,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await response.json();
@@ -248,13 +330,8 @@ export function RecordDetailsPage() {
         });
         setIsUpdateModalOpen(false);
         
-        // If record name changed, navigate to new URL
-        if (updateFormData.new_record_name !== recordDetails?.record_name) {
-          navigate(`/${namespaceId}/${registryName}/${updateFormData.new_record_name}`);
-        } else {
-          // Refresh record details to show updated data
-          await fetchRecordDetails();
-        }
+        // Refresh record details to show updated data
+        await fetchRecordDetails();
       } else {
         toast({
           title: 'Error',
@@ -315,7 +392,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -383,7 +460,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -451,7 +528,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -519,7 +596,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
@@ -638,12 +715,12 @@ export function RecordDetailsPage() {
         
         <Breadcrumb>
           <BreadcrumbList>
-            <BreadcrumbItem>
+            {/* <BreadcrumbItem>
               <BreadcrumbLink onClick={() => navigate('/dashboard')}>
                 Dashboard
               </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
+            </BreadcrumbItem> */}
+            {/* <BreadcrumbSeparator /> */}
             <BreadcrumbItem>
               <BreadcrumbLink onClick={() => navigate(`/namespaces/${namespaceId}`)}>
                 {breadcrumbData?.namespace_name || 'Namespace'}
@@ -712,14 +789,14 @@ export function RecordDetailsPage() {
                   <h3 className="font-medium text-sm text-muted-foreground">Record ID</h3>
                   <p className="text-sm font-mono break-all">{recordDetails.record_id}</p>
                 </div>
-                <div>
-                  <h3 className="font-medium text-sm text-muted-foreground">Digest</h3>
-                  <p className="text-sm font-mono break-all">{recordDetails.digest}</p>
-                </div>
-                <div>
-                  <h3 className="font-medium text-sm text-muted-foreground">Version</h3>
-                  <p className="text-sm font-mono break-all">{recordDetails.version}</p>
-                </div>
+                <TrimmedValueWithCopy 
+                  label="Digest" 
+                  value={recordDetails.digest} 
+                />
+                <TrimmedValueWithCopy 
+                  label="Version" 
+                  value={recordDetails.version} 
+                />
                 <div>
                   <h3 className="font-medium text-sm text-muted-foreground">Version Count</h3>
                   <p className="text-sm">{recordDetails.version_count}</p>
@@ -829,7 +906,7 @@ export function RecordDetailsPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Basic Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="record-name">Record Name *</Label>
                   <Input
                     id="record-name"
@@ -837,16 +914,34 @@ export function RecordDetailsPage() {
                     onChange={(e) => setUpdateFormData(prev => ({ ...prev, new_record_name: e.target.value }))}
                     placeholder="Enter record name"
                   />
-                </div>
+                </div> */}
                 <div className="space-y-2">
                   <Label htmlFor="description">Description *</Label>
                   <Textarea
                     id="description"
                     value={updateFormData.description}
-                    onChange={(e) => setUpdateFormData(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.length <= 200) {
+                        setUpdateFormData(prev => ({ ...prev, description: value }));
+                      }
+                    }}
                     placeholder="Enter record description"
                     rows={3}
+                    maxLength={200}
                   />
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground">Maximum 200 characters</span>
+                    <span className={`${
+                      updateFormData.description.length > 180 
+                        ? 'text-red-500' 
+                        : updateFormData.description.length > 160 
+                        ? 'text-yellow-500' 
+                        : 'text-muted-foreground'
+                    }`}>
+                      {updateFormData.description.length}/200
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -855,28 +950,87 @@ export function RecordDetailsPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Record Details</h3>
               <div className="grid gap-4">
-                {recordDetails && Object.keys(recordDetails.schema).map((field) => (
-                  <div key={field} className="space-y-2">
-                    <Label htmlFor={`detail-${field}`}>
-                      {field} ({recordDetails.schema[field]})
-                    </Label>
-                    <Input
-                      id={`detail-${field}`}
-                      value={updateFormData.details[field] || ''}
-                      onChange={(e) => handleDetailsChange(field, e.target.value)}
-                      placeholder={`Enter ${field}`}
-                    />
-                  </div>
-                ))}
+                {recordDetails && Object.keys(recordDetails.schema).map((field) => {
+                  const fieldType = recordDetails.schema[field].toLowerCase();
+                  
+                  return (
+                    <div key={field} className="space-y-2">
+                      <Label htmlFor={`detail-${field}`}>
+                        {field} ({recordDetails.schema[field]})
+                      </Label>
+                      {fieldType === 'boolean' || fieldType === 'bool' ? (
+                        <Select
+                          value={updateFormData.details[field] || ''}
+                          onValueChange={(value: string) => handleDetailsChange(field, value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Select ${field}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="true">True</SelectItem>
+                            <SelectItem value="false">False</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          id={`detail-${field}`}
+                          type={
+                            fieldType === 'integer' || fieldType === 'int' 
+                              ? 'number'
+                              : fieldType === 'float' || fieldType === 'double' || fieldType === 'number'
+                              ? 'number'
+                              : 'text'
+                          }
+                          step={
+                            fieldType === 'float' || fieldType === 'double' || fieldType === 'number'
+                              ? 'any'
+                              : fieldType === 'integer' || fieldType === 'int'
+                              ? '1'
+                              : undefined
+                          }
+                          value={updateFormData.details[field] || ''}
+                          onChange={(e) => handleDetailsChange(field, e.target.value)}
+                          placeholder={`Enter ${field}`}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Metadata */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Metadata (Optional)</h3>
+              <div className="flex items-center gap-2">
+                <Label>Metadata (Optional)</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="max-w-xs p-2 text-sm">
+                        <p className="font-bold">Customizable Metadata</p>
+                        <p className="my-2">
+                          These are the customizable fields where you can define your own data types as per your application needs.
+                        </p>
+                        <p className="font-semibold">Example:</p>
+                        <div className="ml-2">
+                          <p>
+                            <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                          </p>
+                        </div>
+                        <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div className="grid gap-4">
-                {Object.keys(updateFormData.meta).map((key) => (
-                  <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {Object.keys(updateFormData.meta).map((key, index) => (
+                  <div key={index} className="flex gap-2 items-center">
                     <Input
                       value={key}
                       onChange={(e) => {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle, X } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Archive, RotateCcw, Ban, CheckCircle, X, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -47,6 +48,7 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Updated interface to match API response
 interface Registry {
@@ -108,6 +110,8 @@ export function NamespaceDetailsPage() {
   const { getAuthTokens } = useAuth();
   const [registries, setRegistries] = useState<Registry[]>([]);
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
+  const [totalRegistries, setTotalRegistries] = useState<number>(0);
+  const [revokedRegistriesCount, setRevokedRegistriesCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [createLoading, setCreateLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -150,6 +154,8 @@ export function NamespaceDetailsPage() {
   const [schemaFields, setSchemaFields] = useState<SchemaField[]>([{ key: '', type: 'string' }]);
   const [showCreateMetadata, setShowCreateMetadata] = useState(false);
   const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
+  const [selectedSchemaType, setSelectedSchemaType] = useState<string>('blank');
+  const [showSchemaBuilder, setShowSchemaBuilder] = useState(false);
 
   // Check for ongoing upload on component mount
   useEffect(() => {
@@ -178,6 +184,7 @@ export function NamespaceDetailsPage() {
   useEffect(() => {
     if (namespaceId) {
       fetchRegistries();
+      fetchRevokedRegistriesCount();
     }
   }, [namespaceId]);
 
@@ -185,7 +192,7 @@ export function NamespaceDetailsPage() {
     try {
       console.log('🔄 Fetching registries...');
       setLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
         method: 'GET',
         headers: {
@@ -224,6 +231,7 @@ export function NamespaceDetailsPage() {
         
         setRegistries(uniqueRegistries);
         setNamespaceName(result.data.namespace_name);
+        setTotalRegistries(result.data.total_registries);
         console.log('✅ Registries updated:', uniqueRegistries.length, 'registries');
       } else {
         console.error('❌ Failed to fetch registries:', result.message);
@@ -249,7 +257,7 @@ export function NamespaceDetailsPage() {
   const refreshRegistries = async () => {
     try {
       console.log('🔄 Refreshing registries (silent)...');
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
         method: 'GET',
         headers: {
@@ -286,7 +294,12 @@ export function NamespaceDetailsPage() {
         
         setRegistries(uniqueRegistries);
         setNamespaceName(result.data.namespace_name);
+        setTotalRegistries(result.data.total_registries);
         console.log('✅ Registries silently refreshed:', uniqueRegistries.length, 'registries');
+        
+        // Also refresh revoked registries count
+        await fetchRevokedRegistriesCount();
+        
         return true;
       } else {
         console.error('❌ Failed to refresh registries:', result.message);
@@ -295,6 +308,33 @@ export function NamespaceDetailsPage() {
     } catch (error) {
       console.error('❌ Error refreshing registries:', error);
       return false;
+    }
+  };
+
+  const fetchRevokedRegistriesCount = async () => {
+    try {
+      console.log('🔄 Fetching revoked registries count...');
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
+      const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result: NamespaceQueryResponse = await response.json();
+      console.log('📊 Revoked registries API response:', result);
+      
+      if (result.message === "Resource retrieved successfully") {
+        setRevokedRegistriesCount(result.data.total_registries);
+        console.log('✅ Revoked registries count updated:', result.data.total_registries);
+      } else {
+        console.log('ℹ️ No revoked registries found or API error:', result.message);
+        setRevokedRegistriesCount(0);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching revoked registries count:', error);
+      setRevokedRegistriesCount(0);
     }
   };
 
@@ -323,34 +363,66 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      // Validate schema fields
-      const validSchemaFields = schemaFields.filter(field => field.key.trim() !== '');
-      if (validSchemaFields.length === 0) {
-        toast({
-          title: 'Validation Error',
-          description: 'At least one schema field is required',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Handle schema based on selected type
+      let parsedSchema: { [key: string]: string } = {};
+      
+      if (selectedSchemaType === 'blank') {
+        // Validate schema fields for blank schema
+        const validSchemaFields = schemaFields.filter(field => field.key.trim() !== '');
+        if (validSchemaFields.length === 0) {
+          toast({
+            title: 'Validation Error',
+            description: 'At least one schema field is required',
+            variant: 'destructive',
+          });
+          return;
+        }
 
-      // Check for duplicate keys
-      const keys = validSchemaFields.map(field => field.key.trim());
-      const uniqueKeys = new Set(keys);
-      if (keys.length !== uniqueKeys.size) {
-        toast({
-          title: 'Validation Error',
-          description: 'Schema field keys must be unique',
-          variant: 'destructive',
-        });
-        return;
-      }
+        // Check for duplicate keys
+        const keys = validSchemaFields.map(field => field.key.trim());
+        const uniqueKeys = new Set(keys);
+        if (keys.length !== uniqueKeys.size) {
+          toast({
+            title: 'Validation Error',
+            description: 'Schema field keys must be unique',
+            variant: 'destructive',
+          });
+          return;
+        }
 
-      // Convert schema fields to JSON format
-      const parsedSchema: { [key: string]: string } = {};
-      validSchemaFields.forEach(field => {
-        parsedSchema[field.key.trim()] = field.type;
-      });
+        // Convert schema fields to an object with string keys and string values.
+        parsedSchema = validSchemaFields.reduce((acc, field) => {
+          acc[field.key.trim()] = String(field.type);
+          return acc;
+        }, {} as { [key: string]: string });
+      } else if (selectedSchemaType === 'membership') {
+        // Predefined membership schema
+        parsedSchema = {
+          'member_id': 'string',
+          'member_name': 'string',
+          'membership_type': 'string',
+          'join_date': 'string',
+          'status': 'string'
+        };
+      } else if (selectedSchemaType === 'certificate') {
+        // Predefined certificate schema
+        parsedSchema = {
+          'certificate_id': 'string',
+          'holder_name': 'string',
+          'certificate_type': 'string',
+          'issue_date': 'string',
+          'expiry_date': 'string',
+          'issuer': 'string'
+        };
+      } else if (selectedSchemaType === 'xyz') {
+        // Predefined XYZ schema
+        parsedSchema = {
+          'id': 'string',
+          'name': 'string',
+          'type': 'string',
+          'value': 'string'
+        };
+      }
 
       // Parse metadata (optional)
       let parsedMeta = {};
@@ -369,7 +441,7 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/create-registry`, {
         method: 'POST',
         headers: {
@@ -396,6 +468,8 @@ export function NamespaceDetailsPage() {
         setCreateFormData({ name: '', description: '', schema: '', metadata: '', meta: {} });
         setSchemaFields([{ key: '', type: 'string' }]);
         setShowCreateMetadata(false);
+        setSelectedSchemaType('blank');
+        setShowSchemaBuilder(false);
         // Refresh the registries list
         await refreshRegistries();
       } else {
@@ -488,7 +562,7 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/update-registry`, {
         method: 'POST',
         headers: {
@@ -531,11 +605,6 @@ export function NamespaceDetailsPage() {
     }
   };
 
-  const handleOpenDelegateModal = (registry: Registry) => {
-    setSelectedRegistry(registry);
-    setIsDelegateModalOpen(true);
-  };
-
   const handleDelegateRegistry = async () => {
     if (!selectedRegistry) return;
     try {
@@ -575,7 +644,7 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/archive-registry`, {
         method: 'POST',
         headers: {
@@ -587,27 +656,18 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry archived successfully") {
-        // Update local state immediately to show archived status
-        setRegistries(prevRegistries => 
-          prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_archived: true }
-              : registry
-          )
-        );
-
+      if (response.ok && result.message === "Registry has been archived") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" archived successfully.`,
-          // Ensure default variant (not destructive) for success
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
         toast({
-          title: 'Archive Error', // More specific title
+          title: 'Archive Error',
           description: result.message || 'Failed to archive registry',
           variant: 'destructive',
         });
@@ -645,7 +705,7 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/restore-registry`, {
         method: 'POST',
         headers: {
@@ -657,33 +717,19 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry restored successfully") {
-        console.log('🔄 Restore successful, updating local state for registry:', selectedRegistry.registry_id);
-        
-        // Update local state immediately to remove archived status
-        setRegistries(prevRegistries => {
-          const updatedRegistries = prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_archived: false }
-              : registry
-          );
-          console.log('📊 Updated registries state:', updatedRegistries.find(r => r.registry_id === selectedRegistry.registry_id));
-          return updatedRegistries;
-        });
-
+      if (response.ok && result.message === "Registry has been restored") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" restored successfully.`,
-           // Ensure default variant (not destructive) for success
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
-        // Handle specific 500 error from server or other non-ok responses
         const errorMessage = result.message || (response.status === 500 ? 'Internal Server Error' : 'Failed to restore registry');
         toast({
-          title: 'Restore Error', // More specific title
+          title: 'Restore Error',
           description: errorMessage,
           variant: 'destructive',
         });
@@ -721,7 +767,7 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/revoke-registry`, {
         method: 'POST',
         headers: {
@@ -733,23 +779,15 @@ export function NamespaceDetailsPage() {
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry revoked successfully") {
-        // Update local state immediately to show revoked status
-        setRegistries(prevRegistries => 
-          prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_revoked: true }
-              : registry
-          )
-        );
-
+      if (response.ok ) {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" revoked successfully.`,
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
         toast({
           title: 'Revoke Error',
@@ -790,35 +828,27 @@ export function NamespaceDetailsPage() {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/reinstate-registry`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        // body: JSON.stringify({}),
+        body: JSON.stringify({}),
       });
 
       const result = await response.json();
 
-      if (response.ok && result.message === "Registry reinstated successfully") {
-        // Update local state immediately to remove revoked status
-        setRegistries(prevRegistries => 
-          prevRegistries.map(registry => 
-            registry.registry_id === selectedRegistry.registry_id 
-              ? { ...registry, is_revoked: false }
-              : registry
-          )
-        );
-
+      if (response.ok && result.message === "Registry has been reinstated") {
         toast({
-          title: 'Success!',
+          title: '🎉 Success!',
           description: `Registry "${selectedRegistry.registry_name}" reinstated successfully.`,
+          className: 'border-green-200 bg-green-50 text-green-900',
         });
         
-        // Note: Not refreshing from server immediately to avoid overriding local state
-        // The local state update should be sufficient for immediate UI feedback
+        // Refresh the registries list to show updated status
+        await refreshRegistries();
       } else {
         toast({
           title: 'Reinstate Error',
@@ -883,7 +913,7 @@ export function NamespaceDetailsPage() {
         formData.append('file', file);
       });
 
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'http://localhost:5106';
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/upload`, {
         method: 'POST',
         headers: {
@@ -1188,18 +1218,40 @@ export function NamespaceDetailsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Your Registries</h1>
         <p className="text-muted-foreground mt-2">
-          Manage and organize your registries in this namespace
+          Manage and organize your registries in this namespace ({totalRegistries} total registries, {registries.filter(r => !r.is_revoked && !r.is_archived).length} active registries)
         </p>
       </div>
 
-      <div className="flex justify-start gap-4 mb-8">
-        <Button onClick={() => setIsCreateModalOpen(true)} className="px-8 py-6 text-lg">
-          <Plus className="mr-2 h-4 w-4" />
-          Create Registry
-        </Button>
-        <Button variant="outline" onClick={() => setIsBulkUploadModalOpen(true)} className="px-8 py-6 text-lg">
-          <Upload className="mr-2 h-4 w-4" />
-          Bulk Upload
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex gap-4">
+          <Button onClick={() => {
+            setIsCreateModalOpen(true);
+            setSelectedSchemaType('blank');
+            setShowSchemaBuilder(false);
+            setCreateFormData({ name: '', description: '', schema: '', metadata: '', meta: {} });
+            setSchemaFields([{ key: '', type: 'string' }]);
+            setShowCreateMetadata(false);
+          }} className="px-8 py-6 text-lg">
+            <Plus className="mr-2 h-4 w-4" />
+            Create Registry
+          </Button>
+          <Button variant="outline" onClick={() => setIsBulkUploadModalOpen(true)} className="px-8 py-6 text-lg">
+            <Upload className="mr-2 h-4 w-4" />
+            Bulk Upload
+          </Button>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={() => navigate(`/namespaces/${namespaceId}/revoked`)} 
+          className="px-8 py-6 text-lg relative"
+        >
+          <Ban className="mr-2 h-4 w-4" />
+          Revoked Registries
+          {revokedRegistriesCount > 0 && (
+            <Badge variant="destructive" className="ml-2 px-2 py-1 text-xs">
+              {revokedRegistriesCount}
+            </Badge>
+          )}
         </Button>
       </div>
 
@@ -1233,9 +1285,23 @@ export function NamespaceDetailsPage() {
                     <DropdownMenuItem onClick={() => handleOpenUpdateModal(registry)}>
                       Update
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleOpenDelegateModal(registry)}>
-                      Delegate
-                    </DropdownMenuItem>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <DropdownMenuItem 
+                              disabled
+                              className="cursor-not-allowed opacity-50"
+                            >
+                              Delegate
+                            </DropdownMenuItem>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Feature coming in next version</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <DropdownMenuSeparator />
                     {registry.is_archived ? (
                       <DropdownMenuItem onClick={() => handleOpenRestoreAlert(registry)} className="text-green-600 focus:text-green-600 focus:bg-green-50">
@@ -1269,6 +1335,9 @@ export function NamespaceDetailsPage() {
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Updated: {new Date(registry.updated_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Records: {registry.record_count || 0}
                   </p>
                 </div>
                 {(registry.is_archived || registry.is_revoked) && (
@@ -1304,73 +1373,208 @@ export function NamespaceDetailsPage() {
               <Input
                 id="create-name"
                 value={createFormData.name}
-                onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
-                placeholder="Enter registry name"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow alphanumeric characters, hyphens, and underscores
+                  const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                  setCreateFormData({ ...createFormData, name: filteredValue });
+                }}
+                placeholder="Enter registry name (alphanumeric, _, - only)"
               />
+              <p className="text-xs text-muted-foreground">Only letters, numbers, underscores (_), and hyphens (-) are allowed</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-description">Description *</Label>
               <Textarea
                 id="create-description"
                 value={createFormData.description}
-                onChange={(e) => setCreateFormData({ ...createFormData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setCreateFormData({ ...createFormData, description: value });
+                  }
+                }}
                 placeholder="Enter registry description"
                 rows={3}
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  createFormData.description.length > 180 
+                    ? 'text-red-500' 
+                    : createFormData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {createFormData.description.length}/200
+                </span>
+              </div>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Schema *</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addSchemaField}
+            <div className="space-y-4">
+              <Label>Schema *</Label>
+              
+              {/* Schema Type Selection */}
+              <div className="grid grid-cols-2 gap-4">
+                <div 
+                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
+                    selectedSchemaType === 'blank' 
+                      ? 'border-primary bg-primary/5 shadow-md' 
+                      : 'border-gray-200 hover:border-primary/50'
+                  }`}
+                  onClick={() => {
+                    setSelectedSchemaType('blank');
+                    setShowSchemaBuilder(true);
+                  }}
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Field
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {schemaFields.map((field, index) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <Input
-                      placeholder="Field name"
-                      value={field.key}
-                      onChange={(e) => updateSchemaField(index, 'key', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Select
-                      value={field.type}
-                      onValueChange={(value) => updateSchemaField(index, 'type', value)}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="string">string</SelectItem>
-                        <SelectItem value="int">int</SelectItem>
-                        <SelectItem value="float">float</SelectItem>
-                        <SelectItem value="bool">bool</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {schemaFields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => removeSchemaField(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
+                  <div className="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Plus className="h-6 w-6 text-gray-600" />
                   </div>
-                ))}
+                  <p className="text-sm font-medium">Blank Schema</p>
+                </div>
+                
+                <div 
+                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
+                    selectedSchemaType === 'membership' 
+                      ? 'border-primary bg-primary/5 shadow-md' 
+                      : 'border-gray-200 hover:border-primary/50'
+                  }`}
+                  onClick={() => setSelectedSchemaType('membership')}
+                >
+                  <div className="w-12 h-12 mx-auto mb-2 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <p className="text-sm font-medium">Membership</p>
+                </div>
+                
+                <div 
+                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
+                    selectedSchemaType === 'certificate' 
+                      ? 'border-primary bg-primary/5 shadow-md' 
+                      : 'border-gray-200 hover:border-primary/50'
+                  }`}
+                  onClick={() => setSelectedSchemaType('certificate')}
+                >
+                  <div className="w-12 h-12 mx-auto mb-2 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Archive className="h-6 w-6 text-green-600" />
+                  </div>
+                  <p className="text-sm font-medium">Certificate</p>
+                </div>
+                
+                <div 
+                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
+                    selectedSchemaType === 'xyz' 
+                      ? 'border-primary bg-primary/5 shadow-md' 
+                      : 'border-gray-200 hover:border-primary/50'
+                  }`}
+                  onClick={() => setSelectedSchemaType('xyz')}
+                >
+                  <div className="w-12 h-12 mx-auto mb-2 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Info className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <p className="text-sm font-medium">XYZ</p>
+                </div>
               </div>
+
+              {/* Schema Builder - Only show for Blank Schema */}
+              {selectedSchemaType === 'blank' && showSchemaBuilder && (
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Schema Fields</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addSchemaField}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Field
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {schemaFields.map((field, index) => (
+                      <div key={index} className="flex gap-2 items-center">
+                        <Input
+                          placeholder="Field name (alphanumeric, _, - only)"
+                          value={field.key}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow alphanumeric characters, hyphens, and underscores
+                            const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+                            updateSchemaField(index, 'key', filteredValue);
+                          }}
+                          className="flex-1"
+                        />
+                        <Select
+                          value={field.type}
+                          onValueChange={(value) => updateSchemaField(index, 'type', value)}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="string">string</SelectItem>
+                            <SelectItem value="integer">integer</SelectItem>
+                            <SelectItem value="float">float</SelectItem>
+                            <SelectItem value="bool">bool</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {schemaFields.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => removeSchemaField(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Preview for other schema types */}
+              {selectedSchemaType !== 'blank' && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 text-center">
+                    {selectedSchemaType === 'membership' && 'Membership schema template will be applied'}
+                    {selectedSchemaType === 'certificate' && 'Certificate schema template will be applied'}
+                    {selectedSchemaType === 'xyz' && 'XYZ schema template will be applied'}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="create-metadata">Metadata (optional)</Label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showCreateMetadata}
                   onCheckedChange={setShowCreateMetadata}
@@ -1378,8 +1582,8 @@ export function NamespaceDetailsPage() {
               </div>
               {showCreateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(createFormData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(createFormData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
@@ -1471,23 +1675,70 @@ export function NamespaceDetailsPage() {
               <Input
                 id="update-name"
                 value={updateFormData.name}
-                onChange={(e) => setUpdateFormData({ ...updateFormData, name: e.target.value })}
-                placeholder="Enter registry name"
+                readOnly
+                disabled
+                className="bg-gray-50 dark:bg-gray-800 cursor-not-allowed"
+                placeholder="Registry name cannot be changed"
               />
+              <p className="text-xs text-muted-foreground">Registry name cannot be modified after creation</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="update-description">Description *</Label>
               <Textarea
                 id="update-description"
                 value={updateFormData.description}
-                onChange={(e) => setUpdateFormData({ ...updateFormData, description: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 200) {
+                    setUpdateFormData({ ...updateFormData, description: value });
+                  }
+                }}
                 placeholder="Enter registry description"
                 rows={3}
+                maxLength={200}
               />
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Maximum 200 characters</span>
+                <span className={`${
+                  updateFormData.description.length > 180 
+                    ? 'text-red-500' 
+                    : updateFormData.description.length > 160 
+                    ? 'text-yellow-500' 
+                    : 'text-muted-foreground'
+                }`}>
+                  {updateFormData.description.length}/200
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="update-metadata">Metadata (optional)</Label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">Metadata (Optional)</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="max-w-xs p-2 text-sm">
+                          <p className="font-bold">Customizable Metadata</p>
+                          <p className="my-2">
+                            These are the customizable fields where you can define your own data types as per your application needs.
+                          </p>
+                          <p className="font-semibold">Example:</p>
+                          <div className="ml-2">
+                            <p>
+                              <code className="font-mono text-xs">"bg-card-image"</code>: <code className="font-mono text-xs">"ImageUrl"</code>
+                            </p>
+                          </div>
+                          <p className="my-2 text-xs text-slate-50">
+                              You can use this image URL as per your app requirement.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Switch
                   checked={showUpdateMetadata}
                   onCheckedChange={setShowUpdateMetadata}
@@ -1495,8 +1746,8 @@ export function NamespaceDetailsPage() {
               </div>
               {showUpdateMetadata && (
                 <div className="grid gap-4">
-                  {Object.keys(updateFormData.meta).map((key) => (
-                    <div key={key} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.keys(updateFormData.meta).map((key, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         value={key}
                         onChange={(e) => {
