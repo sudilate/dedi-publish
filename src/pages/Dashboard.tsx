@@ -546,7 +546,7 @@ export function DashboardPage() {
 
       {/* Create Namespace Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Namespace</DialogTitle>
           </DialogHeader>
@@ -713,7 +713,7 @@ export function DashboardPage() {
 
       {/* Update Namespace Modal */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Update Namespace</DialogTitle>
           </DialogHeader>
@@ -877,7 +877,7 @@ export function DashboardPage() {
 
       {/* DNS TXT Modal */}
       <Dialog open={isDnsTxtModalOpen} onOpenChange={setIsDnsTxtModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>DNS TXT Record</DialogTitle>
           </DialogHeader>
