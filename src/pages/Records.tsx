@@ -18,6 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -83,6 +90,7 @@ interface AddRecordFormData {
   description: string;
   details: { [key: string]: string };
   meta: { [key: string]: any };
+  arrayFields: { [key: string]: any[] }; // Add array fields support
 }
 
 // Interface for add record API response
@@ -92,6 +100,15 @@ interface AddRecordApiResponse {
     record_id: string;
   };
 }
+
+// Define array field configurations based on schema
+const arrayFieldConfigs: { [key: string]: { [key: string]: string } } = {
+  previousKeys: {
+    publicKey: 'string',
+    keyType: 'string', 
+    keyFormat: 'string'
+  }
+};
 
 export function RecordsPage() {
   const { namespaceId, registryName } = useParams();
@@ -113,6 +130,7 @@ export function RecordsPage() {
     description: '',
     details: {},
     meta: {},
+    arrayFields: {},
   });
 
   useEffect(() => {
@@ -135,18 +153,23 @@ export function RecordsPage() {
 
       const result: RecordsApiResponse = await response.json();
       console.log('📊 Records API response:', result);
+      console.log('📊 Response status:', response.status);
+      console.log('📊 Response OK:', response.ok);
       
-      if (result.message === "Resource retrieved successfully") {
-        setRecords(result.data.records);
-        setSchema(result.data.schema);
-        setNamespaceName(result.data.namespace_name);
-        setRegistryDisplayName(result.data.registry_name);
-        setTotalRecords(result.data.total_records);
-        console.log('✅ Records updated:', result.data.records.length, 'records');
+      if (response.ok && result.message === "Resource retrieved successfully") {
+        setRecords(result.data.records || []);
+        setSchema(result.data.schema || {});
+        setNamespaceName(result.data.namespace_name || 'Loading...');
+        setRegistryDisplayName(result.data.registry_name || 'Loading...');
+        setTotalRecords(result.data.total_records || 0);
+        console.log('✅ Records updated:', result.data.records?.length || 0, 'records');
         console.log('🏷️ Namespace name from API:', result.data.namespace_name);
         console.log('📁 Registry name from API:', result.data.registry_name);
+        console.log('📊 Schema from API:', result.data.schema);
+        console.log('📊 Records from API:', result.data.records);
       } else {
         console.error('❌ Failed to fetch records:', result.message);
+        console.error('❌ Full error response:', result);
         toast({
           title: 'Error',
           description: result.message || 'Failed to fetch records',
@@ -170,20 +193,83 @@ export function RecordsPage() {
   };
 
   const handleOpenAddModal = () => {
+    console.log('🔧 Opening add modal with schema:', schema);
+    console.log('🔧 Array field configs:', arrayFieldConfigs);
+    
     // Initialize form with empty details based on schema
     const initialDetails: { [key: string]: string } = {};
+    const initialArrayFields: { [key: string]: any[] } = {};
+    
     Object.keys(schema).forEach(field => {
-      initialDetails[field] = '';
+      console.log(`🔧 Processing field: ${field}, type: ${schema[field]}`);
+      
+      if (schema[field].toLowerCase() === 'array' && arrayFieldConfigs[field]) {
+        console.log(`🔧 ${field} is an array field with config:`, arrayFieldConfigs[field]);
+        // Initialize array fields with one empty item
+        const emptyItem: { [key: string]: string } = {};
+        Object.keys(arrayFieldConfigs[field]).forEach(itemKey => {
+          emptyItem[itemKey] = '';
+        });
+        initialArrayFields[field] = [emptyItem];
+      } else {
+        console.log(`🔧 ${field} is a regular field`);
+        initialDetails[field] = '';
+      }
     });
+    
+    console.log('🔧 Initial details:', initialDetails);
+    console.log('🔧 Initial array fields:', initialArrayFields);
     
     setAddFormData({
       record_name: '',
       description: '',
       details: initialDetails,
       meta: {},
+      arrayFields: initialArrayFields,
     });
     setShowAddMetadata(false);
     setIsAddModalOpen(true);
+  };
+
+  // Array field management functions
+  const addArrayItem = (fieldKey: string) => {
+    const config = arrayFieldConfigs[fieldKey];
+    if (!config) return;
+    
+    const emptyItem: { [key: string]: string } = {};
+    Object.keys(config).forEach(itemKey => {
+      emptyItem[itemKey] = '';
+    });
+    
+    setAddFormData(prev => ({
+      ...prev,
+      arrayFields: {
+        ...prev.arrayFields,
+        [fieldKey]: [...(prev.arrayFields[fieldKey] || []), emptyItem]
+      }
+    }));
+  };
+
+  const removeArrayItem = (fieldKey: string, index: number) => {
+    setAddFormData(prev => ({
+      ...prev,
+      arrayFields: {
+        ...prev.arrayFields,
+        [fieldKey]: prev.arrayFields[fieldKey]?.filter((_, i) => i !== index) || []
+      }
+    }));
+  };
+
+  const updateArrayItem = (fieldKey: string, index: number, itemKey: string, value: string) => {
+    setAddFormData(prev => ({
+      ...prev,
+      arrayFields: {
+        ...prev.arrayFields,
+        [fieldKey]: prev.arrayFields[fieldKey]?.map((item, i) => 
+          i === index ? { ...item, [itemKey]: value } : item
+        ) || []
+      }
+    }));
   };
 
   const handleAddRecord = async () => {
@@ -211,24 +297,63 @@ export function RecordsPage() {
         return;
       }
 
+      // Validate required schema fields
+      const missingFields = Object.keys(schema).filter(field => {
+        if (schema[field].toLowerCase() === 'array') {
+          // For array fields, check if at least one valid item exists
+          const arrayItems = addFormData.arrayFields[field] || [];
+          const validItems = arrayItems.filter(item => 
+            Object.values(item).some(val => val && String(val).trim() !== '')
+          );
+          return validItems.length === 0;
+        } else {
+          // For regular fields, check if value exists
+          return !addFormData.details[field] || !addFormData.details[field].trim();
+        }
+      });
+
+      if (missingFields.length > 0) {
+        toast({
+          title: 'Validation Error',
+          description: `Please fill in the following required fields: ${missingFields.join(', ')}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Prepare details with array fields
+      const finalDetails: { [key: string]: string | any[] } = { ...addFormData.details };
+      
+      // Process array fields
+      Object.keys(addFormData.arrayFields).forEach(fieldKey => {
+        const arrayItems = addFormData.arrayFields[fieldKey] || [];
+        const validItems = arrayItems.filter(item => 
+          Object.values(item).some(val => val && String(val).trim() !== '')
+        );
+        if (validItems.length > 0) {
+          finalDetails[fieldKey] = validItems; // Send as actual array, not JSON string
+        }
+      });
+
+      // Prepare metadata (optional)
+      let parsedMeta = {};
+      if (showAddMetadata && Object.keys(addFormData.meta).length > 0) {
+        parsedMeta = addFormData.meta;
+      }
+
       // Get auth tokens
       const { accessToken } = getAuthTokens();
       if (!accessToken) {
         toast({
           title: 'Authentication Error',
-          description: 'Please log in to add records',
+          description: 'Please log in to add a record',
           variant: 'destructive',
         });
         return;
       }
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      const currentNamespaceId = namespaceId || '';
-      const currentRegistryName = registryName || '';
-      
-      console.log('Add Record API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/add-record`);
-      
-      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/add-record`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${registryName}/add-record`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -237,23 +362,33 @@ export function RecordsPage() {
         body: JSON.stringify({
           record_name: addFormData.record_name.trim(),
           description: addFormData.description.trim(),
-          details: addFormData.details,
-          ...(showAddMetadata && Object.keys(addFormData.meta).length > 0 && { meta: addFormData.meta }),
+          details: finalDetails,
+          ...(Object.keys(parsedMeta).length > 0 && { meta: parsedMeta })
         }),
       });
 
       const result: AddRecordApiResponse = await response.json();
-      console.log('Add Record API response:', result);
+      console.log('📝 Add record API response:', result);
+      console.log('📝 Response status:', response.status);
 
-      if (response.ok && result.message === "record created") {
+      if (response.ok && (result.message === "Record created" || result.message === "Record created successfully")) {
         toast({
           title: 'Success',
           description: 'Record added successfully',
         });
         setIsAddModalOpen(false);
+        setAddFormData({
+          record_name: '',
+          description: '',
+          details: {},
+          meta: {},
+          arrayFields: {},
+        });
+        setShowAddMetadata(false);
         // Refresh the records list
         await fetchRecords();
       } else {
+        console.error('❌ API Error:', result);
         toast({
           title: 'Error',
           description: result.message || 'Failed to add record',
@@ -292,8 +427,6 @@ export function RecordsPage() {
     }));
   };
 
-
-
   // Get column headers from schema plus the record name column
   const getColumnHeaders = () => {
     const headers = ['Record Name', ...Object.keys(schema)];
@@ -305,7 +438,29 @@ export function RecordsPage() {
     if (column === 'Record Name') {
       return record.record_name;
     }
-    return record.details[column] || '';
+    
+    const value = record.details[column];
+    
+    // Handle array fields
+    if (Array.isArray(value)) {
+      return `${value.length} item(s)`;
+    }
+    
+    // Handle object fields (for arrays stored as JSON strings)
+    if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return `${parsed.length} item(s)`;
+        }
+        return 'Object';
+      } catch {
+        // If parsing fails, return the string as is
+        return value;
+      }
+    }
+    
+    return value || '';
   };
 
   if (loading) {
@@ -436,7 +591,7 @@ export function RecordsPage() {
 
       {/* Add Record Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Record</DialogTitle>
             <DialogDescription>
@@ -498,19 +653,108 @@ export function RecordsPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Record Details</h3>
               <div className="grid gap-4">
-                {Object.keys(schema).map((field) => (
-                  <div key={field} className="space-y-2">
-                    <Label htmlFor={`add-detail-${field}`}>
-                      {field} ({schema[field]})
-                    </Label>
-                    <Input
-                      id={`add-detail-${field}`}
-                      value={addFormData.details[field] || ''}
-                      onChange={(e) => handleDetailsChange(field, e.target.value)}
-                      placeholder={`Enter ${field}`}
-                    />
-                  </div>
-                ))}
+                {Object.keys(schema).map((field) => {
+                  const fieldType = schema[field].toLowerCase();
+                  const isNumeric = fieldType === 'integer' || fieldType === 'int' || fieldType === 'float' || fieldType === 'double' || fieldType === 'number';
+                  const isBoolean = fieldType === 'boolean' || fieldType === 'bool';
+                  const isArray = fieldType === 'array' && arrayFieldConfigs[field];
+                  
+                  if (isArray) {
+                    const config = arrayFieldConfigs[field];
+                    const arrayItems = addFormData.arrayFields[field] || [];
+                    
+                    return (
+                      <div key={field} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>
+                            {field} 
+                            <span className="text-muted-foreground ml-1">({schema[field]})</span>
+                          </Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addArrayItem(field)}
+                            className="flex items-center gap-1"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add {field.slice(0, -1)} {/* Remove 's' from plural name */}
+                          </Button>
+                        </div>
+                        <div className="space-y-3">
+                          {arrayItems.map((item, index) => (
+                            <div key={index} className="border rounded-lg p-4 space-y-3 bg-gray-50">
+                              <div className="flex items-center justify-between">
+                                <h5 className="font-medium text-sm">{field.slice(0, -1)} {index + 1}</h5>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => removeArrayItem(field, index)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  ×
+                                </Button>
+                              </div>
+                              <div className="grid gap-3">
+                                {Object.keys(config).map((itemKey) => (
+                                  <div key={itemKey} className="space-y-1">
+                                    <Label htmlFor={`${field}-${index}-${itemKey}`} className="text-sm">
+                                      {itemKey}
+                                      <span className="text-muted-foreground ml-1">({config[itemKey]})</span>
+                                    </Label>
+                                    <Input
+                                      id={`${field}-${index}-${itemKey}`}
+                                      value={item[itemKey] || ''}
+                                      onChange={(e) => updateArrayItem(field, index, itemKey, e.target.value)}
+                                      placeholder={`Enter ${itemKey}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <div key={field} className="space-y-2">
+                      <Label htmlFor={`add-detail-${field}`}>
+                        {field} 
+                        <span className="text-muted-foreground ml-1">({schema[field]})</span>
+                      </Label>
+                      {isBoolean ? (
+                        <Select
+                          value={addFormData.details[field] || ''}
+                          onValueChange={(value: string) => handleDetailsChange(field, value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select true or false" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="true">True</SelectItem>
+                            <SelectItem value="false">False</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          id={`add-detail-${field}`}
+                          type={isNumeric ? 'number' : 'text'}
+                          value={addFormData.details[field] || ''}
+                          onChange={(e) => handleDetailsChange(field, e.target.value)}
+                          placeholder={
+                            isNumeric 
+                              ? `Enter ${field} (${fieldType === 'integer' || fieldType === 'int' ? 'whole number' : 'number'})`
+                              : `Enter ${field}`
+                          }
+                          step={fieldType === 'float' || fieldType === 'double' || fieldType === 'number' ? 'any' : undefined}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
