@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -49,6 +50,139 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+// Import schema JSON files
+import membershipSchema from '@/schema/membership.json';
+import publicKeySchema from '@/schema/public_key.json';
+import revokeSchema from '@/schema/revoke.json';
+
+// Utility function to extract properties from JSON schema
+const extractSchemaProperties = (schema: any): { [key: string]: any } => {
+  const properties = schema.properties || {};
+  const extractedProps: { [key: string]: any } = {};
+
+  const processProperty = (key: string, property: any): void => {
+    if (property.type) {
+      // Handle different types
+      switch (property.type) {
+        case 'string':
+          extractedProps[key] = 'string';
+          break;
+        case 'integer':
+        case 'number':
+          extractedProps[key] = 'integer';
+          break;
+        case 'boolean':
+          extractedProps[key] = 'boolean';
+          break;
+        case 'array':
+          // Handle array with nested object properties
+          if (property.items && property.items.type === 'object' && property.items.properties) {
+            const itemProperties: { [key: string]: string } = {};
+            Object.keys(property.items.properties).forEach(itemKey => {
+              const itemProperty = property.items.properties[itemKey];
+              switch (itemProperty.type) {
+                case 'string':
+                  itemProperties[itemKey] = 'string';
+                  break;
+                case 'integer':
+                case 'number':
+                  itemProperties[itemKey] = 'integer';
+                  break;
+                case 'boolean':
+                  itemProperties[itemKey] = 'boolean';
+                  break;
+                default:
+                  itemProperties[itemKey] = 'string';
+              }
+            });
+            extractedProps[key] = { type: 'array', itemProperties };
+          } else {
+            extractedProps[key] = 'array';
+          }
+          break;
+        case 'object':
+          // For objects, we'll flatten the nested properties
+          if (property.properties) {
+            Object.keys(property.properties).forEach(nestedKey => {
+              const nestedProperty = property.properties[nestedKey];
+              processProperty(`${key}_${nestedKey}`, nestedProperty);
+            });
+          } else {
+            extractedProps[key] = 'object';
+          }
+          break;
+        default:
+          extractedProps[key] = 'string';
+      }
+    } else {
+      extractedProps[key] = 'string';
+    }
+  };
+
+  Object.keys(properties).forEach(key => {
+    processProperty(key, properties[key]);
+  });
+
+  return extractedProps;
+};
+
+// Helper function to convert complex schema to simple key-value for API
+const convertSchemaForAPI = (extractedSchema: { [key: string]: any }): { [key: string]: string } => {
+  const apiSchema: { [key: string]: string } = {};
+  
+  Object.keys(extractedSchema).forEach(key => {
+    const value = extractedSchema[key];
+    if (typeof value === 'object' && value.type === 'array') {
+      // For array types, we'll store as 'array' in the API
+      apiSchema[key] = 'array';
+    } else {
+      apiSchema[key] = String(value);
+    }
+  });
+  
+  return apiSchema;
+};
+
+// Schema configurations
+const schemaConfigs = {
+  blank: {
+    name: 'Blank Schema',
+    description: 'Create your own custom schema',
+    icon: Plus,
+    color: 'bg-gray-100',
+    iconColor: 'text-gray-600',
+    schema: null,
+    tooltip: 'Start with an empty schema and add your own fields'
+  },
+  membership: {
+    name: 'Membership',
+    description: 'Membership affiliation schema',
+    icon: CheckCircle,
+    color: 'bg-blue-100',
+    iconColor: 'text-blue-600',
+    schema: membershipSchema,
+    tooltip: membershipSchema.description
+  },
+  publicKey: {
+    name: 'Public Key',
+    description: 'Public key directory schema',
+    icon: Archive,
+    color: 'bg-green-100',
+    iconColor: 'text-green-600',
+    schema: publicKeySchema,
+    tooltip: publicKeySchema.description
+  },
+  revoke: {
+    name: 'Revoke',
+    description: 'Revocation/blacklist schema',
+    icon: Ban,
+    color: 'bg-red-100',
+    iconColor: 'text-red-600',
+    schema: revokeSchema,
+    tooltip: revokeSchema.description
+  }
+};
 
 // Updated interface to match API response
 interface Registry {
@@ -103,6 +237,46 @@ interface NamespaceQueryResponse {
   };
 }
 
+// Interface for bulk upload initial response
+interface BulkUploadInitialResponse {
+  status: string;
+  message: string;
+  data: {
+    jobId: string;
+    totalFiles: number;
+    statusCheckUrl: string;
+  };
+}
+
+// Interface for file result in status response
+interface FileResult {
+  status: string;
+  fileName: string;
+  registryId?: string;
+  namespaceId?: string;
+  entriesCount?: number;
+  error?: string;
+}
+
+// Interface for bulk upload status response
+interface BulkUploadStatusResponse {
+  status: string;
+  message: string;
+  data: {
+    jobId: string;
+    status: string;
+    progress: number;
+    totalFiles: number;
+    processedFiles: number;
+    failedFiles: number;
+    createdAt: string;
+    updatedAt: string;
+    error: string | null;
+    results: FileResult[];
+    namespace: string;
+  };
+}
+
 export function NamespaceDetailsPage() {
   const { namespaceId } = useParams();
   const navigate = useNavigate();
@@ -117,10 +291,16 @@ export function NamespaceDetailsPage() {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string[]>([]);
+  const [uploadJobId, setUploadJobId] = useState<string | null>(null);
+  const [uploadProgressPercent, setUploadProgressPercent] = useState<number>(0);
+  const [processedFiles, setProcessedFiles] = useState<number>(0);
+  const [totalFiles, setTotalFiles] = useState<number>(0);
+  const [completedFileNames, setCompletedFileNames] = useState<Set<string>>(new Set());
   const [globalUploadStatus, setGlobalUploadStatus] = useState<{
     isUploading: boolean;
     message: string;
     namespaceId: string;
+    progress?: number;
   } | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -163,8 +343,13 @@ export function NamespaceDetailsPage() {
     if (savedUploadStatus) {
       try {
         const uploadStatus = JSON.parse(savedUploadStatus);
-        if (uploadStatus.isUploading) {
+        if (uploadStatus.isUploading && uploadStatus.jobId) {
           setGlobalUploadStatus(uploadStatus);
+          setUploadJobId(uploadStatus.jobId);
+          setUploadLoading(true);
+          setUploadProgressPercent(uploadStatus.progress || 0);
+          setTotalFiles(uploadStatus.totalFiles || 0);
+          setProcessedFiles(uploadStatus.processedFiles || 0);
         }
       } catch (error) {
         localStorage.removeItem('bulkUploadStatus');
@@ -174,12 +359,18 @@ export function NamespaceDetailsPage() {
 
   // Save upload status to localStorage whenever it changes
   useEffect(() => {
-    if (globalUploadStatus) {
-      localStorage.setItem('bulkUploadStatus', JSON.stringify(globalUploadStatus));
+    if (globalUploadStatus && uploadJobId) {
+      const statusToSave = {
+        ...globalUploadStatus,
+        jobId: uploadJobId,
+        totalFiles: totalFiles,
+        processedFiles: processedFiles
+      };
+      localStorage.setItem('bulkUploadStatus', JSON.stringify(statusToSave));
     } else {
       localStorage.removeItem('bulkUploadStatus');
     }
-  }, [globalUploadStatus]);
+  }, [globalUploadStatus, uploadJobId, totalFiles, processedFiles]);
 
   useEffect(() => {
     if (namespaceId) {
@@ -187,6 +378,172 @@ export function NamespaceDetailsPage() {
       fetchRevokedRegistriesCount();
     }
   }, [namespaceId]);
+
+  // Polling effect for bulk upload job status
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const pollJobStatus = async () => {
+      if (!uploadJobId) return;
+
+      try {
+        const { accessToken } = getAuthTokens();
+        if (!accessToken) return;
+
+        const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
+        const response = await fetch(`${API_BASE_URL}/dedi/bulk-upload/status/${uploadJobId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          console.error('Failed to fetch job status:', response.status);
+          return;
+        }
+
+        const result: BulkUploadStatusResponse = await response.json();
+        console.log('📊 Job status response:', result);
+
+        if (result.status === 'success' && result.data) {
+          const { status, progress, processedFiles: newProcessedFiles, totalFiles: newTotalFiles, results } = result.data;
+          
+          // Update progress
+          setUploadProgressPercent(progress);
+          setProcessedFiles(newProcessedFiles);
+          setTotalFiles(newTotalFiles);
+          
+          // Update global status with progress
+          setGlobalUploadStatus(prev => prev ? ({
+            ...prev,
+            message: `Processing files... ${newProcessedFiles}/${newTotalFiles} completed`,
+            progress: progress
+          }) : null);
+
+          // Check for newly completed files and show toasts
+          const currentCompletedFiles = new Set(results.filter(r => r.status === 'success').map(r => r.fileName));
+          const newlyCompleted = [...currentCompletedFiles].filter(fileName => !completedFileNames.has(fileName));
+          
+          newlyCompleted.forEach(fileName => {
+            const fileResult = results.find(r => r.fileName === fileName);
+            if (fileResult) {
+              toast({
+                title: '✅ File Processed',
+                description: `${fileName} has been successfully processed${fileResult.entriesCount ? ` (${fileResult.entriesCount} entries)` : ''}`,
+                className: 'border-green-200 bg-green-50 text-green-900',
+                duration: 3000,
+              });
+            }
+          });
+          
+          setCompletedFileNames(currentCompletedFiles);
+
+          // Update progress log
+          setUploadProgress(prev => {
+            const newMessages = [...prev];
+            newlyCompleted.forEach(fileName => {
+              const fileResult = results.find(r => r.fileName === fileName);
+              if (fileResult) {
+                newMessages.push(`✅ ${fileName} processed successfully${fileResult.entriesCount ? ` (${fileResult.entriesCount} entries)` : ''}`);
+              }
+            });
+            return newMessages;
+          });
+
+                    // Check if job is completed
+          if (status === 'completed' && progress === 100) {
+            console.log('🎉 Bulk upload completed!');
+            
+            // Clear polling
+            if (intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+            
+            // Clear job ID to stop polling
+            setUploadJobId(null);
+            setUploadLoading(false);
+            
+            // Update global status to show completion (don't clear it yet)
+            setGlobalUploadStatus(prev => prev ? ({
+              ...prev,
+              message: `Completed! All ${newTotalFiles} files processed successfully`,
+              progress: 100
+            }) : null);
+            
+            // Show completion toast
+            toast({
+              title: '🎉 Bulk Upload Complete!',
+              description: `All ${newTotalFiles} files have been successfully processed!`,
+              className: 'border-green-200 bg-green-50 text-green-900',
+              duration: 5000,
+            });
+            
+            // Add completion message to progress log
+            setUploadProgress(prev => [...prev, `🎉 Upload completed! All ${newTotalFiles} files processed successfully.`]);
+            
+            // Refresh registries
+            setTimeout(async () => {
+              try {
+                // Call fetchRegistries directly since refreshRegistries is not available in scope
+                await fetchRegistries();
+                console.log('✅ Registries refreshed after bulk upload completion');
+              } catch (error) {
+                console.error('❌ Failed to refresh registries:', error);
+                toast({
+                  title: 'Warning',
+                  description: 'Upload completed but failed to refresh list. Please refresh manually.',
+                  variant: 'destructive',
+                });
+              }
+            }, 1000);
+            
+            // Don't auto-close modal - let user close it manually or via the "Continue Working" button
+            // The modal will show completion state with option to close
+            
+          } else if (status === 'failed' || result.data.error) {
+            console.error('❌ Bulk upload failed:', result.data.error);
+            
+            // Clear polling
+            if (intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+            
+            setUploadJobId(null);
+            setUploadLoading(false);
+            setGlobalUploadStatus(null);
+            
+            toast({
+              title: 'Upload Failed',
+              description: result.data.error || 'Bulk upload failed. Please try again.',
+              variant: 'destructive',
+              duration: 7000,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error polling job status:', error);
+      }
+    };
+
+    if (uploadJobId && uploadLoading) {
+      // Initial poll immediately
+      pollJobStatus();
+      
+      // Start polling every 2 seconds
+      intervalId = setInterval(pollJobStatus, 2000);
+    }
+
+    // Cleanup function
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+     }, [uploadJobId, uploadLoading, completedFileNames, getAuthTokens, toast]);
 
   const fetchRegistries = async () => {
     try {
@@ -395,33 +752,20 @@ export function NamespaceDetailsPage() {
           acc[field.key.trim()] = String(field.type);
           return acc;
         }, {} as { [key: string]: string });
-      } else if (selectedSchemaType === 'membership') {
-        // Predefined membership schema
-        parsedSchema = {
-          'member_id': 'string',
-          'member_name': 'string',
-          'membership_type': 'string',
-          'join_date': 'string',
-          'status': 'string'
-        };
-      } else if (selectedSchemaType === 'certificate') {
-        // Predefined certificate schema
-        parsedSchema = {
-          'certificate_id': 'string',
-          'holder_name': 'string',
-          'certificate_type': 'string',
-          'issue_date': 'string',
-          'expiry_date': 'string',
-          'issuer': 'string'
-        };
-      } else if (selectedSchemaType === 'xyz') {
-        // Predefined XYZ schema
-        parsedSchema = {
-          'id': 'string',
-          'name': 'string',
-          'type': 'string',
-          'value': 'string'
-        };
+      } else {
+        // Use dynamic schema extraction from JSON files
+        const schemaConfig = schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs];
+        if (schemaConfig && schemaConfig.schema) {
+          const extractedSchema = extractSchemaProperties(schemaConfig.schema);
+          parsedSchema = convertSchemaForAPI(extractedSchema);
+        } else {
+          toast({
+            title: 'Schema Error',
+            description: 'Selected schema type is not available',
+            variant: 'destructive',
+          });
+          return;
+        }
       }
 
       // Parse metadata (optional)
@@ -451,7 +795,7 @@ export function NamespaceDetailsPage() {
         body: JSON.stringify({
           registry_name: createFormData.name.trim(),
           description: createFormData.description.trim(),
-          schema: parsedSchema,
+          schema: convertSchemaForAPI(parsedSchema),
           query_allowed: true,
           ...(Object.keys(parsedMeta).length > 0 && { meta: parsedMeta })
         }),
@@ -468,6 +812,7 @@ export function NamespaceDetailsPage() {
         setCreateFormData({ name: '', description: '', schema: '', metadata: '', meta: {} });
         setSchemaFields([{ key: '', type: 'string' }]);
         setShowCreateMetadata(false);
+        setShowSchemaBuilder(false);
         setSelectedSchemaType('blank');
         setShowSchemaBuilder(false);
         // Refresh the registries list
@@ -874,10 +1219,10 @@ export function NamespaceDetailsPage() {
     if (uploadLoading) return; // Prevent multiple submissions
     
     try {
-      if (!selectedFiles?.length) {
+      if (!selectedFiles || selectedFiles.length === 0) {
         toast({
           title: 'Error',
-          description: 'Please select files to upload',
+          description: 'Please select at least one file to upload',
           variant: 'destructive',
         });
         return;
@@ -896,12 +1241,17 @@ export function NamespaceDetailsPage() {
 
       setUploadLoading(true);
       setUploadProgress(['Starting upload...']);
+      setUploadProgressPercent(0);
+      setProcessedFiles(0);
+      setTotalFiles(selectedFiles.length);
+      setCompletedFileNames(new Set());
       
       // Set global upload status
       setGlobalUploadStatus({
         isUploading: true,
-        message: `Uploading ${selectedFiles.length} file(s)...`,
-        namespaceId: namespaceId || ''
+        message: `Starting upload of ${selectedFiles.length} file(s)...`,
+        namespaceId: namespaceId || '',
+        progress: 0
       });
 
       // Create FormData
@@ -914,11 +1264,10 @@ export function NamespaceDetailsPage() {
       });
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      const response = await fetch(`${API_BASE_URL}/dedi/upload`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/bulk-upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          // Don't set Content-Type for FormData, browser will set it with boundary
         },
         body: formData,
       });
@@ -926,204 +1275,57 @@ export function NamespaceDetailsPage() {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      console.log('Upload response:', response);
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
 
-      if (reader) {
-        try {
-          // Process streaming response line by line as it arrives
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+      const result: BulkUploadInitialResponse = await response.json();
+      console.log('📤 Initial upload response:', result);
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+      if (result.status === 'success' && result.message === 'Bulk upload job started successfully') {
+        // Show initial success toast
+        toast({
+          title: '🚀 Bulk Upload Started!',
+          description: 'Your files are being processed. You\'ll be notified as each file completes.',
+          className: 'border-blue-200 bg-blue-50 text-blue-900',
+          duration: 3000,
+        });
 
-            for (const line of lines) {
-              if (line.trim()) {
-                try {
-                  const data = JSON.parse(line.trim());
-                  console.log('Upload stream data:', data);
-                  
-                  if (data.message) {
-                    // Update progress in real-time (for modal log)
-                    setUploadProgress(prev => [...prev, data.message]);
-                    
-                    // Check for completion FIRST
-                    if (data.status === 'success' && data.message === 'Bulk upload complete') {
-                      console.log('✅ Upload completed! Processing completion...');
-                      
-                      setGlobalUploadStatus(null); // Clear global progress notification
-                      
-                      toast({
-                        title: '🎉 Upload Complete',
-                        description: 'All files have been uploaded successfully!',
-                        duration: 5000,
-                        className: 'border-green-200 bg-green-50 text-green-900',
-                      });
-                      
-                      setTimeout(async () => {
-                        try {
-                          console.log('🔄 Refreshing registries...');
-                          await refreshRegistries();
-                          console.log('✅ Registries refreshed successfully');
-                        } catch (error) {
-                          console.error('❌ Failed to refresh registries:', error);
-                          toast({
-                            title: 'Warning',
-                            description: 'Upload completed but failed to refresh list. Please refresh manually.',
-                            variant: 'destructive',
-                          });
-                        }
-                      }, 1000);
-                      
-                      setTimeout(() => {
-                        setIsBulkUploadModalOpen(false);
-                        setSelectedFiles(null);
-                      }, 3000);
-                      
-                      // reader.releaseLock() will be handled by the finally block
-                      return; // Exit handleBulkUpload function as upload is fully complete
-                    }
-                    
-                    // Check for errors SECOND
-                    if (data.status === 'error' || 
-                        data.message.toLowerCase().includes('error') || 
-                        data.message.toLowerCase().includes('failed')) {
-                      console.log('❌ Upload error detected:', data.message);
-                      setGlobalUploadStatus(null);
-                      toast({
-                        title: 'Upload Error',
-                        description: data.message,
-                        variant: 'destructive',
-                        duration: 7000,
-                      });
-                      // reader.releaseLock() will be handled by the finally block
-                      return; // Exit handleBulkUpload function on error
-                    }
+        // Set the job ID to start polling
+        setUploadJobId(result.data.jobId);
+        setTotalFiles(result.data.totalFiles);
+        
+        // Initialize progress immediately
+        setUploadProgressPercent(0);
+        setProcessedFiles(0);
+        
+        // Update progress log
+        setUploadProgress(prev => [...prev, `Job started with ID: ${result.data.jobId}`, `Processing ${result.data.totalFiles} files...`]);
+        
+        // Update global status with initial progress
+        setGlobalUploadStatus(prev => prev ? ({
+          ...prev,
+          message: `Processing ${result.data.totalFiles} files... 0/${result.data.totalFiles} completed`,
+          progress: 0
+        }) : null);
 
-                    // If not complete and not an error, and still uploading, update global notification message
-                    if (data.status === 'success' && globalUploadStatus?.isUploading) {
-                      setGlobalUploadStatus(prevStatus => prevStatus ? ({
-                        ...prevStatus,
-                        message: data.message, // Dynamically update progress message
-                      }) : null);
-                    }
-                  }
-                } catch (e) {
-                  console.warn('Failed to parse line:', line);
-                }
-              }
-            }
-          }
-          
-          // Process any remaining buffer after stream ends
-          if (buffer.trim()) {
-            try {
-              const data = JSON.parse(buffer.trim());
-              console.log('Upload stream data (final):', data);
-              
-              if (data.message) {
-                setUploadProgress(prev => [...prev, data.message]);
-                
-                // Check for completion FIRST (also in final buffer)
-                if (data.status === 'success' && data.message === 'Bulk upload complete') {
-                  console.log('✅ Upload completed (final buffer)! Processing completion...');
-                  
-                  setGlobalUploadStatus(null);
-                  toast({
-                    title: '🎉 Upload Complete',
-                    description: 'All files have been uploaded successfully!',
-                    duration: 5000,
-                    className: 'border-green-200 bg-green-50 text-green-900',
-                  });
-                  
-                  setTimeout(async () => {
-                    try {
-                      console.log('🔄 Refreshing registries...');
-                      await refreshRegistries();
-                      console.log('✅ Registries refreshed successfully');
-                    } catch (error) {
-                      console.error('❌ Failed to refresh registries:', error);
-                      toast({
-                        title: 'Warning',
-                        description: 'Upload completed but failed to refresh list. Please refresh manually.',
-                        variant: 'destructive',
-                      });
-                    }
-                  }, 1000);
-                  
-                  setTimeout(() => {
-                    setIsBulkUploadModalOpen(false);
-                    setSelectedFiles(null);
-                  }, 3000);
-                  // reader.releaseLock() will be handled by the finally block
-                  return; // Exit handleBulkUpload
-                }
+        // Note: uploadLoading stays true to keep the modal in processing state
+        // The polling useEffect will handle the rest
 
-                // Check for errors SECOND (also in final buffer)
-                if (data.status === 'error' ||
-                    data.message.toLowerCase().includes('error') ||
-                    data.message.toLowerCase().includes('failed')) {
-                    console.log('❌ Upload error detected (final buffer):', data.message);
-                    setGlobalUploadStatus(null);
-                    toast({
-                        title: 'Upload Error',
-                        description: data.message,
-                        variant: 'destructive',
-                        duration: 7000,
-                    });
-                    // reader.releaseLock() will be handled by the finally block
-                    return; // Exit handleBulkUpload on error
-                }
-                
-                // If not complete and not an error, and still uploading, update global notification message
-                if (data.status === 'success' && globalUploadStatus?.isUploading) {
-                  setGlobalUploadStatus(prevStatus => prevStatus ? ({
-                    ...prevStatus,
-                    message: data.message, // Dynamically update progress message
-                  }) : null);
-                }
-              }
-            } catch (e) {
-              console.warn('Failed to parse final buffer:', buffer);
-            }
-          }
-          
-        } finally {
-          reader.releaseLock();
-        }
+      } else {
+        throw new Error(result.message || 'Failed to start bulk upload job');
       }
-
-      // If we reach here, the stream ended without explicit completion
-      console.log('⚠️ Stream ended without completion message');
-      setGlobalUploadStatus(null);
       
     } catch (error) {
-      console.error('Error uploading files:', error);
+      console.error('Error starting bulk upload:', error);
       setGlobalUploadStatus(null); // Clear global status on error
+      setUploadLoading(false);
+      setUploadJobId(null);
+      
       toast({
         title: 'Error',
-        description: 'Failed to upload files. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to start bulk upload. Please try again.',
         variant: 'destructive',
         duration: 7000,
       });
-      setUploadProgress(prev => [...prev, 'Upload failed. Please try again.']);
-    } finally {
-      setUploadLoading(false);
-      console.log('🔧 Upload process cleanup completed');
-      
-      // Clear local progress after some time if modal is still open
-      setTimeout(() => {
-        if (!uploadLoading) {
-          setUploadProgress([]);
-          console.log('🧹 Upload progress cleared');
-        }
-      }, 10000);
+      setUploadProgress(prev => [...prev, 'Upload failed to start. Please try again.']);
     }
   };
 
@@ -1165,6 +1367,8 @@ export function NamespaceDetailsPage() {
     }));
   };
 
+
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-12">
@@ -1187,22 +1391,37 @@ export function NamespaceDetailsPage() {
             <div className="flex-shrink-0">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
             </div>
-            <div className="ml-3">
+            <div className="ml-3 w-full">
               <p className="text-sm font-medium text-blue-800">
                 Bulk Upload in Progress
               </p>
               <p className="text-xs text-blue-600 mt-1">
                 {globalUploadStatus.message}
               </p>
+              {typeof globalUploadStatus.progress === 'number' && (
+                <div className="mt-2">
+                  <div className="flex justify-between text-xs text-blue-600 mb-1">
+                    <span>Progress</span>
+                    <span>{globalUploadStatus.progress}%</span>
+                  </div>
+                  <Progress value={globalUploadStatus.progress} className="h-2" />
+                </div>
+              )}
               <p className="text-xs text-blue-500 mt-1">
                 You'll be notified when complete
               </p>
-              <button
-                onClick={() => setGlobalUploadStatus(null)}
-                className="text-xs text-blue-700 hover:text-blue-900 mt-2 underline"
-              >
-                Dismiss
-              </button>
+              {globalUploadStatus.progress === 100 ? (
+                <button
+                  onClick={() => setGlobalUploadStatus(null)}
+                  className="text-xs text-blue-700 hover:text-blue-900 mt-2 underline"
+                >
+                  Dismiss
+                </button>
+              ) : (
+                <p className="text-xs text-gray-500 mt-2 italic">
+                  Processing... cannot dismiss yet
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1363,7 +1582,7 @@ export function NamespaceDetailsPage() {
       )}
 
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Registry</DialogTitle>
           </DialogHeader>
@@ -1416,64 +1635,83 @@ export function NamespaceDetailsPage() {
               
               {/* Schema Type Selection */}
               <div className="grid grid-cols-2 gap-4">
-                <div 
-                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
-                    selectedSchemaType === 'blank' 
-                      ? 'border-primary bg-primary/5 shadow-md' 
-                      : 'border-gray-200 hover:border-primary/50'
-                  }`}
-                  onClick={() => {
-                    setSelectedSchemaType('blank');
-                    setShowSchemaBuilder(true);
-                  }}
-                >
-                  <div className="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <Plus className="h-6 w-6 text-gray-600" />
-                  </div>
-                  <p className="text-sm font-medium">Blank Schema</p>
-                </div>
-                
-                <div 
-                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
-                    selectedSchemaType === 'membership' 
-                      ? 'border-primary bg-primary/5 shadow-md' 
-                      : 'border-gray-200 hover:border-primary/50'
-                  }`}
-                  onClick={() => setSelectedSchemaType('membership')}
-                >
-                  <div className="w-12 h-12 mx-auto mb-2 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <p className="text-sm font-medium">Membership</p>
-                </div>
-                
-                <div 
-                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
-                    selectedSchemaType === 'certificate' 
-                      ? 'border-primary bg-primary/5 shadow-md' 
-                      : 'border-gray-200 hover:border-primary/50'
-                  }`}
-                  onClick={() => setSelectedSchemaType('certificate')}
-                >
-                  <div className="w-12 h-12 mx-auto mb-2 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Archive className="h-6 w-6 text-green-600" />
-                  </div>
-                  <p className="text-sm font-medium">Certificate</p>
-                </div>
-                
-                <div 
-                  className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md ${
-                    selectedSchemaType === 'xyz' 
-                      ? 'border-primary bg-primary/5 shadow-md' 
-                      : 'border-gray-200 hover:border-primary/50'
-                  }`}
-                  onClick={() => setSelectedSchemaType('xyz')}
-                >
-                  <div className="w-12 h-12 mx-auto mb-2 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Info className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <p className="text-sm font-medium">XYZ</p>
-                </div>
+                {Object.entries(schemaConfigs).map(([key, config]) => {
+                  const IconComponent = config.icon;
+                  return (
+                    <div 
+                      key={key}
+                      className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:border-primary hover:shadow-md relative ${
+                        selectedSchemaType === key 
+                          ? 'border-primary bg-primary/5 shadow-md' 
+                          : 'border-gray-200 hover:border-primary/50'
+                      }`}
+                      onClick={() => {
+                        setSelectedSchemaType(key);
+                        if (key === 'blank') {
+                          setShowSchemaBuilder(true);
+                        } else {
+                          setShowSchemaBuilder(false);
+                        }
+                      }}
+                    >
+                      {/* Info icon with tooltip for predefined schemas */}
+                      {config.schema && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="absolute top-2 right-2 p-1 hover:bg-gray-200 rounded-full">
+                                <Info className="h-3 w-3 text-gray-500" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <div className="space-y-2">
+                                <p className="font-semibold">{config.name} Schema</p>
+                                <p className="text-sm">{config.tooltip}</p>
+                                <div className="mt-2">
+                                  <p className="text-xs font-medium mb-1">Fields:</p>
+                                  <div className="text-xs space-y-1">
+                                    {Object.entries(extractSchemaProperties(config.schema)).map(([fieldKey, fieldValue]) => {
+                                      if (typeof fieldValue === 'object' && fieldValue.type === 'array' && fieldValue.itemProperties) {
+                                        return (
+                                          <div key={fieldKey} className="border-l-2 border-gray-300 pl-2 space-y-1">
+                                            <div className="flex justify-between">
+                                              <span className="font-mono font-semibold">{fieldKey}:</span>
+                                              <span className="text-gray-600">array</span>
+                                            </div>
+                                            <div className="ml-2 space-y-1">
+                                              {Object.entries(fieldValue.itemProperties).map(([itemKey, itemType]) => (
+                                                <div key={itemKey} className="flex justify-between">
+                                                  <span className="font-mono text-gray-500">  └ {itemKey}:</span>
+                                                  <span className="text-gray-600">{String(itemType)}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <div key={fieldKey} className="flex justify-between">
+                                          <span className="font-mono">{fieldKey}:</span>
+                                          <span className="text-gray-600">{String(fieldValue)}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      
+                      <div className={`w-12 h-12 mx-auto mb-2 ${config.color} rounded-lg flex items-center justify-center`}>
+                        <IconComponent className={`h-6 w-6 ${config.iconColor}`} />
+                      </div>
+                      <p className="text-sm font-medium">{config.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">{config.description}</p>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Schema Builder - Only show for Blank Schema */}
@@ -1516,7 +1754,7 @@ export function NamespaceDetailsPage() {
                             <SelectItem value="string">string</SelectItem>
                             <SelectItem value="integer">integer</SelectItem>
                             <SelectItem value="float">float</SelectItem>
-                            <SelectItem value="bool">bool</SelectItem>
+                            <SelectItem value="boolean">boolean</SelectItem>
                           </SelectContent>
                         </Select>
                         {schemaFields.length > 1 && (
@@ -1537,12 +1775,57 @@ export function NamespaceDetailsPage() {
 
               {/* Preview for other schema types */}
               {selectedSchemaType !== 'blank' && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 text-center">
-                    {selectedSchemaType === 'membership' && 'Membership schema template will be applied'}
-                    {selectedSchemaType === 'certificate' && 'Certificate schema template will be applied'}
-                    {selectedSchemaType === 'xyz' && 'XYZ schema template will be applied'}
-                  </p>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                  <div className="text-center mb-3">
+                    <p className="text-sm font-medium text-gray-700">
+                      {schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs]?.name} schema will be applied
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs]?.description}
+                    </p>
+                  </div>
+                  
+                  {/* Show schema fields preview only */}
+                  {schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs]?.schema && (
+                    <div className="space-y-4">
+                      <p className="text-xs font-medium text-gray-600">Schema Fields Preview:</p>
+                      <div className="space-y-2">
+                        {Object.entries(extractSchemaProperties(schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs].schema!)).map(([key, value]) => {
+                          // For array fields, just show the field type without input controls
+                          if (typeof value === 'object' && value.type === 'array' && value.itemProperties) {
+                            return (
+                              <div key={key} className="border rounded-lg p-3 bg-white">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="font-medium text-sm text-gray-700">{key}</span>
+                                  <Badge variant="outline" className="text-xs">array</Badge>
+                                </div>
+                                <div className="text-xs text-gray-500 ml-2">
+                                  <p className="font-medium mb-1">Array item fields:</p>
+                                  {Object.entries(value.itemProperties).map(([itemKey, itemType]) => (
+                                    <div key={itemKey} className="flex justify-between py-1">
+                                      <span className="font-mono">• {itemKey}:</span>
+                                      <span className="text-gray-600">{String(itemType)}</span>
+                                    </div>
+                                  ))}
+                                  <p className="text-xs text-blue-600 mt-2 italic">
+                                    Array items will be managed when creating records
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            // Regular field preview
+                            return (
+                              <div key={key} className="flex justify-between items-center px-3 py-2 bg-white rounded border text-sm">
+                                <span className="font-mono text-gray-700">{key}</span>
+                                <Badge variant="outline" className="text-xs">{String(value)}</Badge>
+                              </div>
+                            );
+                          }
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1664,7 +1947,7 @@ export function NamespaceDetailsPage() {
       </Dialog>
 
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Update Registry</DialogTitle>
             {selectedRegistry && <DialogDescription>Updating {selectedRegistry.registry_name}</DialogDescription>}
@@ -1828,7 +2111,7 @@ export function NamespaceDetailsPage() {
       </Dialog>
 
       <Dialog open={isDelegateModalOpen} onOpenChange={setIsDelegateModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Delegate Registry Access</DialogTitle>
             {selectedRegistry && <DialogDescription>For registry: {selectedRegistry.registry_name}</DialogDescription>}
@@ -1972,12 +2255,16 @@ export function NamespaceDetailsPage() {
           if (!uploadLoading) {
             setUploadProgress([]);
             setSelectedFiles(null);
+            setUploadProgressPercent(0);
+            setProcessedFiles(0);
+            setTotalFiles(0);
+            setCompletedFileNames(new Set());
           }
         } else {
           setIsBulkUploadModalOpen(true);
         }
       }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Bulk Upload</DialogTitle>
             <DialogDescription>
@@ -1991,6 +2278,7 @@ export function NamespaceDetailsPage() {
                 id="bulk-upload-files"
                 type="file"
                 multiple
+                accept=".csv,.xlsx,.xls,.json"
                 onChange={(e) => setSelectedFiles(e.target.files)}
                 className="cursor-pointer"
                 disabled={uploadLoading}
@@ -2002,52 +2290,102 @@ export function NamespaceDetailsPage() {
               )}
             </div>
             
-            {uploadProgress.length > 0 && (
-              <div className="space-y-2">
-                <Label>Upload Progress</Label>
-                <div className="max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md text-sm">
-                  {uploadProgress.map((message, index) => (
-                    <div key={index} className="text-gray-700 mb-1">
-                      {message}
+            {(uploadLoading || uploadProgressPercent > 0) && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Upload Progress</Label>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Files processed:</span>
+                      <span>{processedFiles} / {totalFiles}</span>
                     </div>
-                  ))}
+                    <Progress value={uploadProgressPercent} className="h-3" />
+                    <div className="text-center text-sm text-muted-foreground">
+                      {uploadProgressPercent}% Complete
+                    </div>
+                  </div>
                 </div>
-                {uploadLoading && (
+                
+                {uploadProgress.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Activity Log</Label>
+                    <div className="max-h-32 overflow-y-auto bg-gray-50 p-3 rounded-md text-sm">
+                      {uploadProgress.map((message, index) => (
+                        <div key={index} className="text-gray-700 mb-1">
+                          {message}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {uploadLoading ? (
                   <p className="text-sm text-blue-600">
                     ℹ️ You can close this modal and continue working. Upload will continue in the background.
                   </p>
-                )}
+                ) : uploadProgressPercent === 100 ? (
+                  <p className="text-sm text-green-600">
+                    ✅ Upload completed successfully! You can now close this modal.
+                  </p>
+                ) : null}
               </div>
             )}
             
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setIsBulkUploadModalOpen(false);
-                  if (!uploadLoading) {
+              {!uploadLoading && uploadProgressPercent === 100 ? (
+                // Show close button when upload is completed
+                <Button 
+                  onClick={() => {
+                    setIsBulkUploadModalOpen(false);
                     setUploadProgress([]);
                     setSelectedFiles(null);
-                  }
-                }}
-                className="flex-1"
-              >
-                {uploadLoading ? 'Continue Working' : 'Cancel'}
-              </Button>
-              <Button 
-                onClick={handleBulkUpload}
-                disabled={uploadLoading || !selectedFiles?.length}
-                className="flex-1"
-              >
-                {uploadLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Uploading...
-                  </>
-                ) : (
-                  'Upload'
-                )}
-              </Button>
+                    setUploadProgressPercent(0);
+                    setProcessedFiles(0);
+                    setTotalFiles(0);
+                    setCompletedFileNames(new Set());
+                    setGlobalUploadStatus(null); // Clear global status when modal is closed
+                  }}
+                  className="w-full"
+                >
+                  Close
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsBulkUploadModalOpen(false);
+                      if (!uploadLoading) {
+                        setUploadProgress([]);
+                        setSelectedFiles(null);
+                        setUploadProgressPercent(0);
+                        setProcessedFiles(0);
+                        setTotalFiles(0);
+                        setCompletedFileNames(new Set());
+                        setGlobalUploadStatus(null);
+                      }
+                      // If upload is in progress, keep the global status for background monitoring
+                    }}
+                    className="flex-1"
+                  >
+                    {uploadLoading ? 'Continue Working' : 'Cancel'}
+                  </Button>
+                  <Button 
+                    onClick={handleBulkUpload}
+                    disabled={uploadLoading || !selectedFiles || selectedFiles.length === 0}
+                    className="flex-1"
+                  >
+                    {uploadLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      'Upload'
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </DialogContent>
