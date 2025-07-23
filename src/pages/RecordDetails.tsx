@@ -842,7 +842,7 @@ export function RecordDetailsPage() {
                     {key}
                   </div>
                   <div className="text-sm font-mono break-all sm:text-right">
-                    {value || 'N/A'}
+                    {value !== null && value !== undefined && value !== '' ? String(value) : 'N/A'}
                   </div>
                 </div>
               ))}
@@ -894,7 +894,7 @@ export function RecordDetailsPage() {
 
       {/* Update Record Modal */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Update Record</DialogTitle>
             <DialogDescription>
