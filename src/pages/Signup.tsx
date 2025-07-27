@@ -1,6 +1,5 @@
-import { Link } from 'react-router-dom';
 import { SignupForm } from '@/components/auth/SignupForm';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function SignupPage() {
   return (
@@ -8,25 +7,14 @@ export function SignupPage() {
       <div className="w-full max-w-md">
         <Card className="border-0 shadow-xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center">Register</CardTitle>
             <CardDescription className="text-center">
-              Enter your information to create your account
+              Enter your email address to register
             </CardDescription>
           </CardHeader>
           <CardContent>
             <SignupForm />
           </CardContent>
-          <CardFooter className="flex flex-col gap-4 border-t pt-6">
-            <div className="text-sm text-center text-muted-foreground">
-              Already have an account?{' '}
-              <Link
-                to="/login"
-                className="text-primary font-medium hover:underline"
-              >
-                Sign in here
-              </Link>
-            </div>
-          </CardFooter>
         </Card>
       </div>
     </div>
