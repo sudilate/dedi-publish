@@ -160,12 +160,8 @@ export function HomePage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
               <Button size="lg" className="text-lg h-12 px-8" onClick={() => navigate('/signup')}>
-                Get Started
+                Register
                 <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button size="lg" variant="outline" className="text-lg h-12 px-8" onClick={() => navigate('/login')}>
-                Login
-                <ArrowUpRight className="ml-2 h-5 w-5" />
               </Button>
             </div>
             <div className="flex justify-center gap-8 pt-12">

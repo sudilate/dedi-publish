@@ -28,7 +28,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/lib/auth-context';
 
 // Updated interface to match API response
 interface Registry {
@@ -69,7 +68,6 @@ export function RevokedRegistriesPage() {
   const { namespaceId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getAuthTokens } = useAuth();
   const [registries, setRegistries] = useState<Registry[]>([]);
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [totalRegistries, setTotalRegistries] = useState<number>(0);
@@ -91,6 +89,7 @@ export function RevokedRegistriesPage() {
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`, {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -159,22 +158,14 @@ export function RevokedRegistriesPage() {
     if (!selectedRegistry) return;
     setActionLoading(true);
     try {
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to reinstate the registry',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Cookie authentication is handled automatically by credentials: 'include'
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${selectedRegistry.registry_name}/reinstate-registry`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({}),
       });
