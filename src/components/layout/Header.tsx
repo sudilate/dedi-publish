@@ -39,8 +39,8 @@ export function Header() {
   };
 
   const getInitials = () => {
-    if (!user || !user.firstName || !user.lastName) return 'U';
-    return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    if (!user || !user.email) return 'U';
+    return user.email[0].toUpperCase();
   };
 
   const showAuthButtons = !isAuthenticated && location.pathname === '/';
@@ -85,14 +85,8 @@ export function Header() {
             </>
           ) : showAuthButtons ? (
             <div className="flex items-center gap-4">
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/login')}
-              >
-                Log in
-              </Button>
               <Button onClick={() => navigate('/signup')}>
-                Sign up
+                Register
               </Button>
             </div>
           ) : null}
@@ -115,8 +109,8 @@ export function Header() {
                       <AvatarFallback className="bg-primary/10 text-primary font-medium">{getInitials()}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{user?.firstName} {user?.lastName}</p>
-                      <p className="text-sm text-muted-foreground">{user?.email}</p>
+                      <p className="font-medium">{user?.email}</p>
+                      <p className="text-sm text-muted-foreground">User</p>
                     </div>
                   </div>
                   <Button 
@@ -138,13 +132,8 @@ export function Header() {
                 </>
               ) : showAuthButtons ? (
                 <div className="flex flex-col gap-4 mt-4">
-                  <Button 
-                    onClick={() => navigate('/login')}
-                  >
-                    Log in
-                  </Button>
                   <Button onClick={() => navigate('/signup')}>
-                    Sign up
+                    Register
                   </Button>
                 </div>
               ) : null}

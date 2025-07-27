@@ -47,7 +47,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/lib/auth-context';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Interface for breadcrumb API response
@@ -143,7 +142,6 @@ export function RecordDetailsPage() {
   const { namespaceId, registryName, recordName } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getAuthTokens } = useAuth();
   
   const [breadcrumbData, setBreadcrumbData] = useState<BreadcrumbApiResponse['data'] | null>(null);
   const [recordDetails, setRecordDetails] = useState<RecordDetailsApiResponse['data'] | null>(null);
@@ -183,6 +181,7 @@ export function RecordDetailsPage() {
       
       const response = await fetch(`${API_BASE_URL}/dedi/lookup/${encodedNamespace}/${encodedRegistry}/${encodedRecord}`, {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -250,16 +249,7 @@ export function RecordDetailsPage() {
         return;
       }
 
-      // Get auth tokens
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to update records',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Cookie authentication is handled automatically by credentials: 'include'
 
       // Convert details based on schema types
       const typedDetails: { [key: string]: any } = {};
@@ -313,9 +303,9 @@ export function RecordDetailsPage() {
       
       const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${recordName}/update-record`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(requestBody),
       });
@@ -381,16 +371,7 @@ export function RecordDetailsPage() {
     try {
       setArchiveLoading(true);
       
-      // Get auth tokens
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to archive records',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Cookie authentication is handled automatically by credentials: 'include'
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
@@ -402,9 +383,9 @@ export function RecordDetailsPage() {
       
       const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/archive-record`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({}),
       });
@@ -449,16 +430,7 @@ export function RecordDetailsPage() {
     try {
       setRevokeLoading(true);
       
-      // Get auth tokens
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to revoke records',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Cookie authentication is handled automatically by credentials: 'include'
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
@@ -470,9 +442,9 @@ export function RecordDetailsPage() {
       
       const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/revoke-record`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({}),
       });
@@ -517,16 +489,7 @@ export function RecordDetailsPage() {
     try {
       setRestoreLoading(true);
       
-      // Get auth tokens
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to restore records',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Cookie authentication is handled automatically by credentials: 'include'
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
@@ -538,9 +501,9 @@ export function RecordDetailsPage() {
       
       const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/restore-record`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({}),
       });
@@ -585,16 +548,7 @@ export function RecordDetailsPage() {
     try {
       setReinstateLoading(true);
       
-      // Get auth tokens
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to reinstate records',
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Cookie authentication is handled automatically by credentials: 'include'
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
@@ -606,9 +560,9 @@ export function RecordDetailsPage() {
       
       const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/reinstate-record`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({}),
       });
@@ -722,19 +676,25 @@ export function RecordDetailsPage() {
             </BreadcrumbItem> */}
             {/* <BreadcrumbSeparator /> */}
             <BreadcrumbItem>
-              <BreadcrumbLink onClick={() => navigate(`/namespaces/${namespaceId}`)}>
+              <BreadcrumbLink 
+                onClick={() => navigate(`/namespaces/${namespaceId}`)}
+                className="cursor-pointer hover:underline"
+              >
                 {breadcrumbData?.namespace_name || 'Namespace'}
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbLink onClick={() => navigate(`/${namespaceId}/${registryName}`)}>
+              <BreadcrumbLink 
+                onClick={() => navigate(`/${namespaceId}/${registryName}`)}
+                className="cursor-pointer hover:underline"
+              >
                 {breadcrumbData?.registry_name || registryName}
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{recordDetails.record_name}</BreadcrumbPage>
+              <BreadcrumbPage>{recordDetails?.record_name || recordName}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>

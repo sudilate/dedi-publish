@@ -45,14 +45,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/lib/auth-context';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface RecordDetails {
   [key: string]: string | number;
 }
 
-interface Record {
+interface RecordItem {
   digest: string;
   record_name: string;
   record_id: string;
@@ -75,12 +74,12 @@ interface RecordsApiResponse {
     namespace_name: string;
     registry_name: string;
     registry_id: string;
-    schema: { [key: string]: string };
+    schema: { [key: string]: any };
     created_by: string;
     created_at: string;
     updated_at: string;
     total_records: number;
-    records: Record[];
+    records: RecordItem[];
   };
 }
 
@@ -114,10 +113,9 @@ export function RecordsPage() {
   const { namespaceId, registryName } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getAuthTokens } = useAuth();
   
-  const [records, setRecords] = useState<Record[]>([]);
-  const [schema, setSchema] = useState<{ [key: string]: string }>({});
+  const [records, setRecords] = useState<RecordItem[]>([]);
+  const [schema, setSchema] = useState<{ [key: string]: any }>({});
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [registryDisplayName, setRegistryDisplayName] = useState<string>('Loading...');
   const [totalRecords, setTotalRecords] = useState<number>(0);
@@ -146,6 +144,7 @@ export function RecordsPage() {
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}/${registryName}`, {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -157,16 +156,22 @@ export function RecordsPage() {
       console.log('📊 Response OK:', response.ok);
       
       if (response.ok && result.message === "Resource retrieved successfully") {
+        console.log('🔍 Processing API response...');
+        console.log('🔍 Raw records data:', result.data.records);
+        console.log('🔍 Records array length:', result.data.records?.length);
+        console.log('🔍 First record structure:', result.data.records?.[0]);
+        
         setRecords(result.data.records || []);
         setSchema(result.data.schema || {});
         setNamespaceName(result.data.namespace_name || 'Loading...');
         setRegistryDisplayName(result.data.registry_name || 'Loading...');
         setTotalRecords(result.data.total_records || 0);
+        
         console.log('✅ Records updated:', result.data.records?.length || 0, 'records');
         console.log('🏷️ Namespace name from API:', result.data.namespace_name);
         console.log('📁 Registry name from API:', result.data.registry_name);
         console.log('📊 Schema from API:', result.data.schema);
-        console.log('📊 Records from API:', result.data.records);
+        console.log('📊 Records state after update:', result.data.records);
       } else {
         console.error('❌ Failed to fetch records:', result.message);
         console.error('❌ Full error response:', result);
@@ -188,7 +193,7 @@ export function RecordsPage() {
     }
   };
 
-  const handleRowClick = (record: Record) => {
+  const handleRowClick = (record: RecordItem) => {
     navigate(`/${namespaceId}/${registryName}/${record.record_name}`);
   };
 
@@ -200,10 +205,16 @@ export function RecordsPage() {
     const initialDetails: { [key: string]: string } = {};
     const initialArrayFields: { [key: string]: any[] } = {};
     
-    Object.keys(schema).forEach(field => {
-      console.log(`🔧 Processing field: ${field}, type: ${schema[field]}`);
+    // Handle both simple schema format and JSON schema format
+    const schemaProperties = schema.properties || schema;
+    
+    Object.keys(schemaProperties).forEach(field => {
+      const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
+      const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
       
-      if (schema[field].toLowerCase() === 'array' && arrayFieldConfigs[field]) {
+      console.log(`🔧 Processing field: ${field}, type: ${fieldType}`);
+      
+      if (fieldType === 'array' && arrayFieldConfigs[field]) {
         console.log(`🔧 ${field} is an array field with config:`, arrayFieldConfigs[field]);
         // Initialize array fields with one empty item
         const emptyItem: { [key: string]: string } = {};
@@ -298,8 +309,12 @@ export function RecordsPage() {
       }
 
       // Validate required schema fields
-      const missingFields = Object.keys(schema).filter(field => {
-        if (schema[field].toLowerCase() === 'array') {
+      const schemaProperties = schema.properties || schema;
+      const missingFields = Object.keys(schemaProperties).filter(field => {
+        const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
+        const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+        
+        if (fieldType === 'array') {
           // For array fields, check if at least one valid item exists
           const arrayItems = addFormData.arrayFields[field] || [];
           const validItems = arrayItems.filter(item => 
@@ -321,8 +336,44 @@ export function RecordsPage() {
         return;
       }
 
-      // Prepare details with array fields
-      const finalDetails: { [key: string]: string | any[] } = { ...addFormData.details };
+      // Prepare details with proper type conversion
+      const finalDetails: { [key: string]: string | number | boolean | any[] } = {};
+      
+      // Convert form data to proper types based on schema
+      const schemaProps = schema.properties || schema;
+      Object.keys(schemaProps).forEach(field => {
+        const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
+        const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+        const value = addFormData.details[field];
+        
+        if (value !== undefined && value !== '') {
+          switch (fieldType) {
+            case 'integer':
+            case 'int':
+              const intValue = parseInt(value, 10);
+              if (!isNaN(intValue)) {
+                finalDetails[field] = intValue;
+              }
+              break;
+            case 'number':
+            case 'float':
+            case 'double':
+              const floatValue = parseFloat(value);
+              if (!isNaN(floatValue)) {
+                finalDetails[field] = floatValue;
+              }
+              break;
+            case 'boolean':
+            case 'bool':
+              finalDetails[field] = value === 'true' || value === '1';
+              break;
+            case 'string':
+            default:
+              finalDetails[field] = value;
+              break;
+          }
+        }
+      });
       
       // Process array fields
       Object.keys(addFormData.arrayFields).forEach(fieldKey => {
@@ -341,23 +392,37 @@ export function RecordsPage() {
         parsedMeta = addFormData.meta;
       }
 
-      // Get auth tokens
-      const { accessToken } = getAuthTokens();
-      if (!accessToken) {
-        toast({
-          title: 'Authentication Error',
-          description: 'Please log in to add a record',
-          variant: 'destructive',
-        });
-        return;
+      // Cookie authentication is handled automatically by credentials: 'include'
+      
+      // Debug: Check if cookies are available
+      console.log('🍪 Document cookies:', document.cookie);
+      console.log('🔐 Checking authentication state...');
+      
+      // Check if token cookie exists
+      const cookies = document.cookie.split(';');
+      const tokenCookie = cookies.find(cookie => cookie.trim().startsWith('token='));
+      console.log('🔍 Token cookie found:', !!tokenCookie);
+      
+      if (tokenCookie) {
+        try {
+          const tokenValue = tokenCookie.split('=')[1];
+          const parsedToken = JSON.parse(decodeURIComponent(tokenValue));
+          console.log('✅ Token parsed successfully:', !!parsedToken.access_token);
+        } catch (e) {
+          console.log('❌ Error parsing token:', e);
+        }
+      } else {
+        console.log('❌ No token cookie found - this is the authentication issue!');
       }
 
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
+      console.log('🔄 Making API call to:', `${API_BASE_URL}/dedi/${namespaceId}/${registryName}/add-record`);
+      
       const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${registryName}/add-record`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           record_name: addFormData.record_name.trim(),
@@ -371,7 +436,7 @@ export function RecordsPage() {
       console.log('📝 Add record API response:', result);
       console.log('📝 Response status:', response.status);
 
-      if (response.ok && (result.message === "Record created" || result.message === "Record created successfully")) {
+      if (response.ok && (result.message === "record created" || result.message === "Record created" || result.message === "Record created successfully")) {
         toast({
           title: 'Success',
           description: 'Record added successfully',
@@ -417,7 +482,7 @@ export function RecordsPage() {
     }));
   };
 
-  const handleMetaChange = (key: string, value: any) => {
+  const handleMetaChange = (key: string, value: unknown) => {
     setAddFormData(prev => ({
       ...prev,
       meta: {
@@ -429,12 +494,13 @@ export function RecordsPage() {
 
   // Get column headers from schema plus the record name column
   const getColumnHeaders = () => {
-    const headers = ['Record Name', ...Object.keys(schema)];
+    const schemaProperties = schema.properties || schema;
+    const headers = ['Record Name', ...Object.keys(schemaProperties)];
     return headers;
   };
 
   // Get cell value for a record and column
-  const getCellValue = (record: Record, column: string) => {
+  const getCellValue = (record: RecordItem, column: string) => {
     if (column === 'Record Name') {
       return record.record_name;
     }
@@ -462,6 +528,10 @@ export function RecordsPage() {
     
     return value || '';
   };
+
+  console.log('🔍 Render check - records state:', records);
+  console.log('🔍 Render check - records length:', records.length);
+  console.log('🔍 Render check - loading state:', loading);
 
   if (loading) {
     return (
@@ -502,25 +572,6 @@ export function RecordsPage() {
           <Plus className="mr-2 h-4 w-4" />
           Add Record
         </Button>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <Button 
-                  variant="outline" 
-                  disabled
-                  className="px-8 py-6 text-lg cursor-not-allowed opacity-50"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Bulk Upload
-                </Button>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Feature coming in next version</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </div>
 
       {records.length === 0 ? (
@@ -653,8 +704,10 @@ export function RecordsPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Record Details</h3>
               <div className="grid gap-4">
-                {Object.keys(schema).map((field) => {
-                  const fieldType = schema[field].toLowerCase();
+                {Object.keys(schema.properties || schema).map((field) => {
+                  // Handle both simple schema format and JSON schema format
+                  const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
+                  const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
                   const isNumeric = fieldType === 'integer' || fieldType === 'int' || fieldType === 'float' || fieldType === 'double' || fieldType === 'number';
                   const isBoolean = fieldType === 'boolean' || fieldType === 'bool';
                   const isArray = fieldType === 'array' && arrayFieldConfigs[field];
@@ -668,7 +721,7 @@ export function RecordsPage() {
                         <div className="flex items-center justify-between">
                           <Label>
                             {field} 
-                            <span className="text-muted-foreground ml-1">({schema[field]})</span>
+                            <span className="text-muted-foreground ml-1">({fieldType})</span>
                           </Label>
                           <Button
                             type="button"
@@ -723,7 +776,7 @@ export function RecordsPage() {
                     <div key={field} className="space-y-2">
                       <Label htmlFor={`add-detail-${field}`}>
                         {field} 
-                        <span className="text-muted-foreground ml-1">({schema[field]})</span>
+                        <span className="text-muted-foreground ml-1">({fieldType})</span>
                       </Label>
                       {isBoolean ? (
                         <Select
@@ -817,7 +870,7 @@ export function RecordsPage() {
                         <Input
                           value={typeof addFormData.meta[key] === 'string' ? addFormData.meta[key] : JSON.stringify(addFormData.meta[key])}
                           onChange={(e) => {
-                            let value: any = e.target.value;
+                            let value: unknown = e.target.value;
                             // Try to parse as JSON if it looks like an object
                             if (value.startsWith('{') || value.startsWith('[')) {
                               try {
