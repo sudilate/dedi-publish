@@ -81,6 +81,7 @@ export async function registerUser(
   email: string
 ): Promise<ApiResponse<string>> {
   try {
+    const { username, firstname, lastname, email, hashed_password } = userData;
     const response = await fetch(`${API_BASE_URL}/dedi/register`, {
       method: "POST",
       ...defaultFetchOptions,

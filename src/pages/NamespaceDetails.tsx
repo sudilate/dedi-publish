@@ -167,7 +167,6 @@ const convertSchemaForAPI = (extractedSchema: {
       apiSchema[key] = String(value);
     }
   });
-
   return apiSchema;
 };
 
@@ -878,6 +877,44 @@ export function NamespaceDetailsPage() {
           });
           return;
         }
+
+        // Check for duplicate keys
+        const keys = validSchemaFields.map(field => field.key.trim());
+        const uniqueKeys = new Set(keys);
+        if (keys.length !== uniqueKeys.size) {
+          toast({
+            title: 'Validation Error',
+            description: 'Schema field keys must be unique',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        // Convert schema fields to an object with string keys and string values.
+        parsedSchema = validSchemaFields.reduce((acc, field) => {
+          acc[field.key.trim()] = String(field.type);
+          return acc;
+        }, {} as { [key: string]: string });
+      } else {
+        // Use dynamic schema extraction from JSON files
+        const schemaConfig = schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs];
+        if (schemaConfig && schemaConfig.schema) {
+          const extractedSchema = extractSchemaProperties(schemaConfig.schema);
+          parsedSchema = convertSchemaForAPI(extractedSchema);
+        } else {
+          toast({
+            title: 'Schema Error',
+            description: 'Selected schema type is not available',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      // Parse metadata (optional)
+      let parsedMeta = {};
+      if (showCreateMetadata && Object.keys(createFormData.meta).length > 0) {
+        parsedMeta = createFormData.meta;
       }
 
       // Parse metadata (optional)
@@ -1422,7 +1459,6 @@ export function NamespaceDetailsPage() {
       setProcessedFiles(0);
       setTotalFiles(selectedFiles.length);
       setCompletedFileNames(new Set());
-
       // Set global upload status
       setGlobalUploadStatus({
         isUploading: true,
@@ -1787,6 +1823,9 @@ export function NamespaceDetailsPage() {
                   <p className="text-sm text-muted-foreground">
                     Records: {registry.record_count || 0}
                   </p>
+                  <p className="text-sm text-muted-foreground">
+                    Records: {registry.record_count || 0}
+                  </p>
                 </div>
                 {(registry.is_archived || registry.is_revoked) && (
                   <div className="mt-2 flex gap-2">
@@ -1871,7 +1910,6 @@ export function NamespaceDetailsPage() {
             </div>
             <div className="space-y-4">
               <Label>Schema *</Label>
-
               {/* Schema Type Selection */}
               <div className="grid grid-cols-2 gap-4">
                 {Object.entries(schemaConfigs).map(([key, config]) => {
@@ -2769,7 +2807,6 @@ export function NamespaceDetailsPage() {
                 </p>
               )}
             </div>
-
             {(uploadLoading || uploadProgressPercent > 0) && (
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -2787,7 +2824,6 @@ export function NamespaceDetailsPage() {
                     </div>
                   </div>
                 </div>
-
                 {uploadProgress.length > 0 && (
                   <div className="space-y-2">
                     <Label>Activity Log</Label>

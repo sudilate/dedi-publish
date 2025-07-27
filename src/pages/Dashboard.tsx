@@ -679,6 +679,9 @@ export function DashboardPage() {
                   <p className="text-sm text-muted-foreground">
                     Registries: {namespace.registry_count || 0}
                   </p>
+                  <p className="text-sm text-muted-foreground">
+                    Registries: {namespace.registry_count || 0}
+                  </p>
                 </div>
                 <div className="mt-4 flex justify-end">
                   <Button
