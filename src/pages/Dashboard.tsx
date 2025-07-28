@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
-  Check,
   AlertCircle,
   MoreVertical,
   Copy,
   Info,
+  Check,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -44,6 +44,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 // Interface for namespace data from API
 interface Namespace {
@@ -60,6 +61,7 @@ interface Namespace {
   meta: {
     [key: string]: unknown;
   };
+  is_verified: boolean;
   verified?: boolean;
   dnsTxt?: string | null;
 }
@@ -75,7 +77,8 @@ export function DashboardPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [namespaces, setNamespaces] = useState<Namespace[]>([]);
+  const [ownedNamespaces, setOwnedNamespaces] = useState<Namespace[]>([]);
+  const [delegatedNamespaces, setDelegatedNamespaces] = useState<Namespace[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -91,6 +94,11 @@ export function DashboardPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showCreateMetadata, setShowCreateMetadata] = useState(false);
   const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
+  const [createModalDomainInput, setCreateModalDomainInput] = useState("");
+  const [isGeneratingCreateDns, setIsGeneratingCreateDns] = useState(false);
+  const [createModalGeneratedTxt, setCreateModalGeneratedTxt] = useState<string | null>(null);
+  const [isVerifyingCreate, setIsVerifyingCreate] = useState(false);
+  const [createdNamespaceId, setCreatedNamespaceId] = useState<string | null>(null);
   const [formData, setFormData] = useState<NamespaceFormData>({
     name: "",
     description: "",
@@ -107,16 +115,8 @@ export function DashboardPage() {
       console.log("📊 API response:", result);
 
       if (result.message === "User namespaces retrieved successfully") {
-        // Combine owned and delegated namespaces
-        const allNamespaces = [
-          ...(result.data.owned_namespaces || []),
-          ...(result.data.delegated_namespaces || []),
-        ];
-
-        console.log("📋 All namespaces from API:", allNamespaces);
-
-        // Add UI properties
-        const namespacesWithProps = allNamespaces.map(
+        // Process owned namespaces
+        const ownedNamespacesWithProps = (result.data.owned_namespaces || []).map(
           (namespace: Namespace) => ({
             ...namespace,
             verified: false, // Default to false, can be updated based on business logic
@@ -124,8 +124,20 @@ export function DashboardPage() {
           })
         );
 
-        console.log("✅ Setting namespaces in state:", namespacesWithProps);
-        setNamespaces(namespacesWithProps);
+        // Process delegated namespaces
+        const delegatedNamespacesWithProps = (result.data.delegated_namespaces || []).map(
+          (namespace: Namespace) => ({
+            ...namespace,
+            verified: false, // Default to false, can be updated based on business logic
+            dnsTxt: null, // Default to null
+          })
+        );
+
+        console.log("✅ Setting owned namespaces in state:", ownedNamespacesWithProps);
+        console.log("✅ Setting delegated namespaces in state:", delegatedNamespacesWithProps);
+        
+        setOwnedNamespaces(ownedNamespacesWithProps);
+        setDelegatedNamespaces(delegatedNamespacesWithProps);
       } else {
         // Don't show toast for "No namespaces found" as it's a normal case for new users
         if (result.message !== "No namespaces found") {
@@ -212,13 +224,16 @@ export function DashboardPage() {
           className: "border-green-200 bg-green-50 text-green-900",
         });
 
-        // Store the namespace_id if needed for future API calls
+        // Store the namespace_id for DNS and verify operations
+        setCreatedNamespaceId(result.data.namespace_id);
         console.log("Created namespace ID:", result.data.namespace_id);
 
         // Close modal and reset form
         setIsCreateModalOpen(false);
         setFormData({ name: "", description: "", metadata: "", meta: {} });
         setShowCreateMetadata(false);
+        setCreateModalDomainInput("");
+        setCreateModalGeneratedTxt(null);
 
         // Refresh the namespaces list
         await fetchNamespaces();
@@ -245,6 +260,117 @@ export function DashboardPage() {
       });
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleCreateModalGenerateDns = async () => {
+    if (!createModalDomainInput.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid domain name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // First create the namespace if it doesn't exist
+    if (!createdNamespaceId) {
+      await handleCreateNamespace();
+      if (!createdNamespaceId) return; // If creation failed, don't proceed
+    }
+
+    try {
+      setIsGeneratingCreateDns(true);
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
+      const response = await fetch(
+        `${API_BASE_URL}/dedi/generate-dns-txt/${createdNamespaceId}/${createModalDomainInput.trim()}`,
+        {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setCreateModalGeneratedTxt(result.txt);
+        toast({
+          title: "DNS TXT Record Generated",
+          description: result.message || "DNS TXT record has been generated successfully.",
+          className: "border-green-200 bg-green-50 text-green-900",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || "Failed to generate DNS TXT record.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error generating DNS TXT record:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate DNS TXT record. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingCreateDns(false);
+    }
+  };
+
+  const handleCreateModalVerify = async () => {
+    // First create the namespace if it doesn't exist
+    if (!createdNamespaceId) {
+      await handleCreateNamespace();
+      if (!createdNamespaceId) return; // If creation failed, don't proceed
+    }
+
+    try {
+      setIsVerifyingCreate(true);
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
+      const response = await fetch(`${API_BASE_URL}/dedi/verify-domain`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          namespace_id: createdNamespaceId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "✅ Verification Successful!",
+          description: result.message || "Domain has been successfully verified.",
+          className: "border-green-200 bg-green-50 text-green-900",
+        });
+
+        // Refresh the namespaces list to show updated verification status
+        await fetchNamespaces();
+      } else {
+        toast({
+          title: "Verification Failed",
+          description: result.message || "Failed to verify domain.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying namespace:", error);
+      toast({
+        title: "Error",
+        description: "Failed to verify domain. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifyingCreate(false);
     }
   };
 
@@ -440,8 +566,15 @@ export function DashboardPage() {
         setGeneratedTxt(result.txt);
 
         // Update the namespace in the list with the DNS TXT record
-        setNamespaces(
-          namespaces.map((ns) =>
+        setOwnedNamespaces(prev =>
+          prev.map((ns) =>
+            ns.namespace_id === selectedNamespace.namespace_id
+              ? { ...ns, dnsTxt: result.txt }
+              : ns
+          )
+        );
+        setDelegatedNamespaces(prev =>
+          prev.map((ns) =>
             ns.namespace_id === selectedNamespace.namespace_id
               ? { ...ns, dnsTxt: result.txt }
               : ns
@@ -497,8 +630,15 @@ export function DashboardPage() {
 
       if (response.ok) {
         // Update the namespace as verified in the UI
-        setNamespaces(
-          namespaces.map((ns) =>
+        setOwnedNamespaces(prev =>
+          prev.map((ns) =>
+            ns.namespace_id === namespace.namespace_id
+              ? { ...ns, verified: true }
+              : ns
+          )
+        );
+        setDelegatedNamespaces(prev =>
+          prev.map((ns) =>
             ns.namespace_id === namespace.namespace_id
               ? { ...ns, verified: true }
               : ns
@@ -536,8 +676,15 @@ export function DashboardPage() {
         description: "DNS TXT record copied to clipboard",
       });
       setIsDnsTxtModalOpen(false);
-      setNamespaces(
-        namespaces.map((ns) =>
+      setOwnedNamespaces(prev =>
+        prev.map((ns) =>
+          ns.namespace_id === selectedNamespace.namespace_id
+            ? { ...ns, dnsTxt: selectedNamespace.dnsTxt }
+            : ns
+        )
+      );
+      setDelegatedNamespaces(prev =>
+        prev.map((ns) =>
           ns.namespace_id === selectedNamespace.namespace_id
             ? { ...ns, dnsTxt: selectedNamespace.dnsTxt }
             : ns
@@ -598,22 +745,24 @@ export function DashboardPage() {
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Your Namespaces</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage and organize your projects in dedicated namespaces (
-          {namespaces.length} total namespaces)
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Your Namespaces</h1>
+            <p className="text-muted-foreground mt-2">
+              Manage and organize your projects in dedicated namespaces
+            </p>
+          </div>
+          <Button
+            className="px-8 py-6 text-lg"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <Plus className="mr-2 h-5 w-5" />
+            Create Namespace
+          </Button>
+        </div>
       </div>
 
-      <Button
-        className="mb-8 px-8 py-6 text-lg"
-        onClick={() => setIsCreateModalOpen(true)}
-      >
-        <Plus className="mr-2 h-5 w-5" />
-        Create Namespace
-      </Button>
-
-      {namespaces.length === 0 ? (
+      {ownedNamespaces.length === 0 && delegatedNamespaces.length === 0 ? (
         <div className="text-center py-12">
           <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">No namespaces found</h3>
@@ -622,8 +771,138 @@ export function DashboardPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {namespaces.map((namespace) => (
+        <div className="space-y-8">
+          {/* My Namespaces Section */}
+          {ownedNamespaces.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">
+                  My Namespaces ({ownedNamespaces.length})
+                </h2>
+                {ownedNamespaces.length > 3 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/namespaces/owned')}
+                  >
+                    View More
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {ownedNamespaces.slice(0, 3).map((namespace) => (
+                  <Card
+                    key={namespace.namespace_id}
+                    className="hover:shadow-lg transition-shadow cursor-pointer"
+                    onClick={() => handleNamespaceClick(namespace.namespace_id)}
+                  >
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle>{namespace.name}</CardTitle>
+                        <CardDescription>
+                          <TruncatedText text={namespace.description} maxLength={100} />
+                        </CardDescription>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          asChild
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem
+                            onClick={() => openUpdateModal(namespace)}
+                          >
+                            Update
+                          </DropdownMenuItem>
+                          {!namespace.dnsTxt && (
+                            <DropdownMenuItem
+                              onClick={() => handleGenerateDnsTxt(namespace)}
+                            >
+                              Generate DNS TXT
+                            </DropdownMenuItem>
+                          )}
+                          {namespace.dnsTxt && (
+                            <DropdownMenuItem
+                              onClick={() => handleViewDnsTxt(namespace)}
+                            >
+                              View DNS TXT
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">
+                          Created:{" "}
+                          {new Date(namespace.created_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Updated:{" "}
+                          {new Date(namespace.updated_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Registries: {namespace.registry_count || 0}
+                        </p>
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        {namespace.is_verified ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2 text-green-600">
+                                  <Check className="h-4 w-4" />
+                                  <span className="text-sm font-medium">Verified</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>This namespace is verified</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-medium px-4 py-2 shadow-sm hover:shadow-md transition-all"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              handleVerifyNamespace(namespace);
+                            }}
+                          >
+                            Verify
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Shared Namespaces Section */}
+          {delegatedNamespaces.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">
+                  Shared Namespaces ({delegatedNamespaces.length})
+                </h2>
+                {delegatedNamespaces.length > 3 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/namespaces/shared')}
+                  >
+                    View More
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {delegatedNamespaces.slice(0, 3).map((namespace) => (
             <Card
               key={namespace.namespace_id}
               className="hover:shadow-lg transition-shadow cursor-pointer"
@@ -632,7 +911,9 @@ export function DashboardPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>{namespace.name}</CardTitle>
-                  <CardDescription>{namespace.description}</CardDescription>
+                  <CardDescription>
+                    <TruncatedText text={namespace.description} maxLength={100} />
+                  </CardDescription>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -681,22 +962,41 @@ export function DashboardPage() {
                   </p>
                 </div>
                 <div className="mt-4 flex justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-medium px-4 py-2 shadow-sm hover:shadow-md transition-all"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      handleVerifyNamespace(namespace);
-                    }}
-                  >
-                    Verify
-                  </Button>
+                  {namespace.is_verified ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2 text-green-600">
+                            <Check className="h-4 w-4" />
+                            <span className="text-sm font-medium">Verified</span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>This namespace is verified</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-medium px-4 py-2 shadow-sm hover:shadow-md transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleVerifyNamespace(namespace);
+                      }}
+                    >
+                      Verify
+                    </Button>
+                  )}
                 </div>
               </CardContent>
-            </Card>
-          ))}
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -880,6 +1180,80 @@ export function DashboardPage() {
                 </div>
               )}
             </div>
+            
+            {/* DNS TXT and Verify Section */}
+            <div className="space-y-4 border-t pt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Domain for DNS TXT (Optional)</label>
+                <Input
+                  value={createModalDomainInput}
+                  onChange={(e) => setCreateModalDomainInput(e.target.value)}
+                  placeholder="Enter domain name (e.g., example.com)"
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleCreateModalGenerateDns}
+                  disabled={isGeneratingCreateDns || !createModalDomainInput.trim()}
+                >
+                  {isGeneratingCreateDns ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    "Generate DNS TXT"
+                  )}
+                </Button>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleCreateModalVerify}
+                  disabled={isVerifyingCreate}
+                >
+                  {isVerifyingCreate ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    "Verify"
+                  )}
+                </Button>
+              </div>
+              
+              {createModalGeneratedTxt && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Generated DNS TXT Record:</label>
+                  <div className="p-3 bg-gray-50 rounded-md border">
+                    <code className="text-sm break-all">{createModalGeneratedTxt}</code>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createModalGeneratedTxt);
+                      toast({
+                        title: "Copied!",
+                        description: "DNS TXT record copied to clipboard",
+                      });
+                    }}
+                    className="w-full"
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy to Clipboard
+                  </Button>
+                </div>
+              )}
+            </div>
+            
             <Button
               className="w-full"
               onClick={handleCreateNamespace}

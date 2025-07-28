@@ -54,19 +54,62 @@ export function AuthVerifyPage() {
 
   // Separate effect to handle redirect when user is authenticated
   useEffect(() => {
-    if (status === "success" && !isLoading && isAuthenticated) {
-      // User is authenticated, redirect to dashboard
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 1000);
-    } else if (status === "success" && !isLoading && !isAuthenticated) {
-      // Auth context finished loading but user is not authenticated
-      // This shouldn't happen after successful verification, but handle it
-      setTimeout(() => {
-        navigate("/");
-      }, 2000);
+    console.log(
+      "🔍 AuthVerify - status:",
+      status,
+      "isLoading:",
+      isLoading,
+      "isAuthenticated:",
+      isAuthenticated
+    );
+
+    if (status === "success") {
+      // For successful verification, always check auth status directly via API
+      // This ensures we get the most up-to-date authentication state
+      const checkAuthAndRedirect = async () => {
+        try {
+          console.log("🔍 AuthVerify - Checking auth status via API...");
+          const response = await fetch(
+            `${
+              import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global"
+            }/dedi/auth/me`,
+            {
+              method: "GET",
+              credentials: "include",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (response.ok) {
+            console.log(
+              "✅ AuthVerify - User is authenticated, redirecting to dashboard"
+            );
+            // Give a short delay for user to see the success message
+            setTimeout(() => {
+              navigate("/dashboard");
+            }, 1500);
+          } else {
+            console.log(
+              "❌ AuthVerify - User is not authenticated, redirecting to home"
+            );
+            setTimeout(() => {
+              navigate("/");
+            }, 2000);
+          }
+        } catch (error) {
+          console.log("❌ AuthVerify - Error checking auth status:", error);
+          setTimeout(() => {
+            navigate("/");
+          }, 2000);
+        }
+      };
+
+      // Wait a moment for the cookie to be properly set, then check auth
+      setTimeout(checkAuthAndRedirect, 1000);
     }
-  }, [status, isLoading, isAuthenticated, navigate]);
+  }, [status, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">

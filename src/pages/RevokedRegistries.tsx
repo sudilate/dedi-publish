@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Ban, MoreVertical, CheckCircle } from 'lucide-react';
+import { Ban, MoreVertical, CheckCircle, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 // Updated interface to match API response
 interface Registry {
@@ -36,7 +38,7 @@ interface Registry {
   registry_name: string;
   description: string;
   created_by: string;
-  schema: any;
+  schema: unknown;
   created_at: string;
   updated_at: string;
   record_count: number;
@@ -45,8 +47,8 @@ interface Registry {
   query_allowed: boolean;
   is_revoked: boolean;
   is_archived: boolean;
-  delegates: any[];
-  meta: any;
+  delegates: unknown[];
+  meta: unknown;
 }
 
 // Interface for API response
@@ -69,6 +71,7 @@ export function RevokedRegistriesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [registries, setRegistries] = useState<Registry[]>([]);
+  const [allRegistries, setAllRegistries] = useState<Registry[]>([]);
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [totalRegistries, setTotalRegistries] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -76,13 +79,47 @@ export function RevokedRegistriesPage() {
   const [isReinstateAlertOpen, setIsReinstateAlertOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  useEffect(() => {
-    if (namespaceId) {
-      fetchRevokedRegistries();
-    }
-  }, [namespaceId]);
+  // Search functionality state
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isSearching, setIsSearching] = useState(false);
 
-  const fetchRevokedRegistries = async () => {
+  // Search function for filtering registries
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      // Reset to show all registries
+      setRegistries(allRegistries);
+      return;
+    }
+
+    // Filter registries based on search query
+    const filteredRegistries = allRegistries.filter(registry => 
+      registry.registry_name.toLowerCase().includes(query.toLowerCase()) ||
+      registry.description.toLowerCase().includes(query.toLowerCase())
+    );
+    
+    setRegistries(filteredRegistries);
+    console.log("✅ Filtered revoked registries:", filteredRegistries.length, "registries found");
+  }, [allRegistries]);
+
+  // Handle search input change with debouncing
+  const handleSearchInputChange = (value: string) => {
+    const timeoutId = setTimeout(() => {
+      handleSearch(value);
+    }, 300); // 300ms debounce
+
+    // Cleanup function to clear timeout
+    return () => clearTimeout(timeoutId);
+  };
+
+  // Clear search results
+  const clearSearch = () => {
+    setSearchQuery("");
+    setRegistries(allRegistries);
+  };
+
+  const fetchRevokedRegistries = useCallback(async () => {
     try {
       console.log('🔄 Fetching revoked registries...');
       setLoading(true);
@@ -125,6 +162,7 @@ export function RevokedRegistriesPage() {
         );
         
         setRegistries(uniqueRegistries);
+        setAllRegistries(uniqueRegistries); // Store all registries for search filtering
         setNamespaceName(result.data.namespace_name);
         setTotalRegistries(result.data.total_registries);
         console.log('✅ Revoked registries updated:', uniqueRegistries.length, 'registries');
@@ -143,7 +181,13 @@ export function RevokedRegistriesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [namespaceId, toast]);
+
+  useEffect(() => {
+    if (namespaceId) {
+      fetchRevokedRegistries();
+    }
+  }, [namespaceId, fetchRevokedRegistries]);
 
   const handleRegistryClick = (registry: Registry) => {
     navigate(`/${namespaceId}/${registry.registry_name}`);
@@ -236,6 +280,29 @@ export function RevokedRegistriesPage() {
         </p>
       </div>
 
+      {/* Search Bar */}
+      <div className="mb-8">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search revoked registries..."
+            value={searchQuery}
+            onChange={(e) => handleSearchInputChange(e.target.value)}
+            className="pl-10 pr-10"
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSearch}
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
       {registries.length === 0 ? (
         <div className="text-center py-12">
           <Ban className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -255,7 +322,9 @@ export function RevokedRegistriesPage() {
               <CardHeader className="flex flex-row items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <CardTitle className="truncate">{registry.registry_name}</CardTitle>
-                  <CardDescription>{registry.description}</CardDescription>
+                  <CardDescription>
+                    <TruncatedText text={registry.description} maxLength={100} />
+                  </CardDescription>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

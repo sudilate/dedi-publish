@@ -39,22 +39,9 @@ api.interceptors.response.use(
   }
 );
 
-// Auth endpoints
+// Auth endpoints - simplified for registration-only flow
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post("/auth/login", { email, password }),
-
-  signup: (userData: {
-    username: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-  }) => api.post("/auth/signup", userData),
-
   logout: () => api.post("/auth/logout"),
-
-  getCurrentUser: () => api.get("/auth/me"),
 };
 
 // Export the api instance for other requests
@@ -112,23 +99,7 @@ export async function registerUser(
   }
 }
 
-// Get current user info (for checking authentication status)
-export async function getCurrentUser(): Promise<any> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/dedi/auth/me`, {
-      method: "GET",
-      ...defaultFetchOptions,
-    });
 
-    if (response.ok) {
-      return await response.json();
-    } else {
-      throw new Error("Not authenticated");
-    }
-  } catch (error) {
-    throw error;
-  }
-}
 
 // Get namespaces by profile (using cookie authentication)
 export async function getNamespacesByProfile(): Promise<any> {
@@ -157,7 +128,7 @@ export async function createNamespace(namespaceData: {
   name: string;
   description: string;
   meta: any;
-}): Promise<any> {
+}): Promise<unknown> {
   try {
     const response = await fetch(`${API_BASE_URL}/dedi/create-namespace`, {
       method: "POST",
@@ -188,7 +159,7 @@ export async function updateNamespace(
   namespaceData: {
     name: string;
     description: string;
-    meta: any;
+    meta: unknown;
   }
 ): Promise<unknown> {
   try {
@@ -215,6 +186,41 @@ export async function updateNamespace(
       throw error;
     }
     throw new Error("Network error occurred while updating namespace");
+  }
+}
+
+// Check authentication status by calling the auth/me endpoint
+// The httpOnly cookie will be automatically sent with this request
+export async function checkAuthStatus(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dedi/auth/me`, {
+      method: "GET",
+      ...defaultFetchOptions,
+    });
+
+    // If the request succeeds, user is authenticated
+    return response.ok;
+  } catch (error) {
+    // If request fails, user is not authenticated
+    return false;
+  }
+}
+
+// Get current user info using the auth/me endpoint
+export async function getCurrentUser(): Promise<unknown> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dedi/auth/me`, {
+      method: "GET",
+      ...defaultFetchOptions,
+    });
+
+    if (response.ok) {
+      return await response.json();
+    } else {
+      throw new Error("Not authenticated");
+    }
+  } catch (error) {
+    throw error;
   }
 }
 

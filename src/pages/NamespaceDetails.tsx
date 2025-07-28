@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Plus,
@@ -10,6 +10,8 @@ import {
   CheckCircle,
   X,
   Info,
+  ArrowLeft,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,13 +37,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -71,6 +67,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 // Import schema JSON files
 import membershipSchema from "@/schema/membership.json";
@@ -78,11 +75,11 @@ import publicKeySchema from "@/schema/public_key.json";
 import revokeSchema from "@/schema/revoke.json";
 
 // Utility function to extract properties from JSON schema
-const extractSchemaProperties = (schema: any): { [key: string]: any } => {
+const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } => {
   const properties = schema.properties || {};
-  const extractedProps: { [key: string]: any } = {};
+  const extractedProps: { [key: string]: unknown } = {};
 
-  const processProperty = (key: string, property: any): void => {
+  const processProperty = (key: string, property: unknown): void => {
     if (property.type) {
       // Handle different types
       switch (property.type) {
@@ -154,7 +151,7 @@ const extractSchemaProperties = (schema: any): { [key: string]: any } => {
 
 // Helper function to convert complex schema to simple key-value for API
 const convertSchemaForAPI = (extractedSchema: {
-  [key: string]: any;
+  [key: string]: unknown;
 }): { [key: string]: string } => {
   const apiSchema: { [key: string]: string } = {};
 
@@ -173,15 +170,6 @@ const convertSchemaForAPI = (extractedSchema: {
 
 // Schema configurations
 const schemaConfigs = {
-  blank: {
-    name: "Blank Schema",
-    description: "Create your own custom schema",
-    icon: Plus,
-    color: "bg-gray-100",
-    iconColor: "text-gray-600",
-    schema: null,
-    tooltip: "Start with an empty schema and add your own fields",
-  },
   membership: {
     name: "Membership",
     description: "Membership affiliation schema",
@@ -303,11 +291,30 @@ interface BulkUploadStatusResponse {
   };
 }
 
+// Interface for search record
+interface SearchRecord {
+  id: string;
+  registry_name: string;
+  record_name: string;
+  details: { [key: string]: unknown };
+  created_at: string;
+  updated_at: string;
+  namespace_id: string;
+}
+
+// Interface for search response
+interface SearchResponse {
+  message: string;
+  data: SearchRecord[];
+}
+
 export function NamespaceDetailsPage() {
   const { namespaceId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [registries, setRegistries] = useState<Registry[]>([]);
+  const [activeRegistries, setActiveRegistries] = useState<Registry[]>([]);
+  const [revokedRegistries, setRevokedRegistries] = useState<Registry[]>([]);
   const [namespaceName, setNamespaceName] = useState<string>("Loading...");
   const [totalRegistries, setTotalRegistries] = useState<number>(0);
   const [revokedRegistriesCount, setRevokedRegistriesCount] =
@@ -365,8 +372,215 @@ export function NamespaceDetailsPage() {
   ]);
   const [showCreateMetadata, setShowCreateMetadata] = useState(false);
   const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
-  const [selectedSchemaType, setSelectedSchemaType] = useState<string>("blank");
+  const [selectedSchemaType, setSelectedSchemaType] = useState<string>("membership");
   const [showSchemaBuilder, setShowSchemaBuilder] = useState(false);
+  
+  // Search functionality state
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<SearchRecord[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // Search function - filters registries only
+  const handleSearch = useCallback((query: string) => {
+    if (!query.trim()) {
+      // Reset to show all registries
+      setActiveRegistries(registries.filter(registry => !registry.is_revoked));
+      setRevokedRegistries(registries.filter(registry => registry.is_revoked));
+      return;
+    }
+
+    // Filter registries based on search query
+    const filteredRegistries = registries.filter(registry => 
+      registry.registry_name.toLowerCase().includes(query.toLowerCase()) ||
+      registry.description.toLowerCase().includes(query.toLowerCase())
+    );
+    
+    setActiveRegistries(filteredRegistries.filter(registry => !registry.is_revoked));
+    setRevokedRegistries(filteredRegistries.filter(registry => registry.is_revoked));
+    
+    console.log("✅ Filtered registries:", filteredRegistries.length, "registries found");
+  }, [registries]);
+
+  // Handle search input change with debouncing
+  const handleSearchInputChange = (value: string) => {
+    setSearchQuery(value);
+    
+    // Clear previous timeout
+    const timeoutId = setTimeout(() => {
+      handleSearch(value);
+    }, 500); // 500ms debounce
+
+    // Cleanup function to clear timeout
+    return () => clearTimeout(timeoutId);
+  };
+
+  // Handle clicking on a search result
+  const handleSearchResultClick = (record: SearchRecord) => {
+    navigate(`/${namespaceId}/${record.registry_name}/${record.record_name}`);
+  };
+
+  // Clear search results
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearchResults(false);
+  };
+
+  // Define fetch functions before useEffect
+  const fetchRegistries = useCallback(async () => {
+    try {
+      console.log("🔄 Fetching registries...");
+      setLoading(true);
+      const API_BASE_URL =
+        import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
+      
+      // Fetch both active and revoked registries to ensure we get all registries
+      const [activeResponse, revokedResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      ]);
+
+      const [activeResult, revokedResult] = await Promise.all([
+        activeResponse.json(),
+        revokedResponse.json()
+      ]);
+
+      console.log("📊 Active registries API response:", activeResult);
+      console.log("📊 Revoked registries API response:", revokedResult);
+
+      // Combine registries from both responses
+      let allRegistries: Registry[] = [];
+      let namespaceName = "Loading...";
+      let totalRegistriesCount = 0;
+
+      if (activeResult.message === "Resource retrieved successfully") {
+        allRegistries = [...allRegistries, ...activeResult.data.registries];
+        namespaceName = activeResult.data.namespace_name;
+        totalRegistriesCount += activeResult.data.total_registries;
+      }
+
+      if (revokedResult.message === "Resource retrieved successfully") {
+        allRegistries = [...allRegistries, ...revokedResult.data.registries];
+        if (namespaceName === "Loading...") {
+          namespaceName = revokedResult.data.namespace_name;
+        }
+        totalRegistriesCount += revokedResult.data.total_registries;
+      }
+
+      if (allRegistries.length > 0) {
+        // Group registries by registry_id and keep only the latest version of each
+        const registryMap = new Map<string, Registry>();
+
+        allRegistries.forEach((registry) => {
+          const existingRegistry = registryMap.get(registry.registry_id);
+
+          if (!existingRegistry) {
+            // First time seeing this registry_id, add it
+            registryMap.set(registry.registry_id, registry);
+          } else {
+            // Registry already exists, keep the one with latest updated_at
+            const existingDate = new Date(
+              existingRegistry.updated_at
+            ).getTime();
+            const currentDate = new Date(registry.updated_at).getTime();
+
+            if (currentDate > existingDate) {
+              registryMap.set(registry.registry_id, registry);
+            }
+          }
+        });
+
+        // Convert map back to array and sort by updated_at in descending order
+        const uniqueRegistries = Array.from(registryMap.values()).sort(
+          (a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+
+        // Filter registries into active and revoked arrays
+        const activeRegs = uniqueRegistries.filter(registry => !registry.is_revoked);
+        const revokedRegs = uniqueRegistries.filter(registry => registry.is_revoked);
+
+        setRegistries(uniqueRegistries);
+        setActiveRegistries(activeRegs);
+        setRevokedRegistries(revokedRegs);
+        setNamespaceName(namespaceName);
+        setTotalRegistries(totalRegistriesCount);
+        console.log(
+          "✅ Registries updated:",
+          uniqueRegistries.length,
+          "registries",
+          `(${activeRegs.length} active, ${revokedRegs.length} revoked)`
+        );
+      } else {
+        console.log("ℹ️ No registries found");
+        setRegistries([]);
+        setActiveRegistries([]);
+        setRevokedRegistries([]);
+        setNamespaceName(namespaceName);
+        setTotalRegistries(0);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching registries:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch registries. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [namespaceId, toast]);
+
+  const fetchRevokedRegistriesCount = useCallback(async () => {
+    try {
+      console.log("🔄 Fetching revoked registries count...");
+      const API_BASE_URL =
+        import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
+      const response = await fetch(
+        `${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`,
+        {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result: NamespaceQueryResponse = await response.json();
+      console.log("📊 Revoked registries API response:", result);
+
+      if (result.message === "Resource retrieved successfully") {
+        setRevokedRegistriesCount(result.data.total_registries);
+        console.log(
+          "✅ Revoked registries count updated:",
+          result.data.total_registries
+        );
+      } else {
+        console.log(
+          "ℹ️ No revoked registries found or API error:",
+          result.message
+        );
+        setRevokedRegistriesCount(0);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching revoked registries count:", error);
+      setRevokedRegistriesCount(0);
+    }
+  }, [namespaceId]);
 
   // Check for ongoing upload on component mount
   useEffect(() => {
@@ -404,11 +618,12 @@ export function NamespaceDetailsPage() {
   }, [globalUploadStatus, uploadJobId, totalFiles, processedFiles]);
 
   useEffect(() => {
+    console.log('🔄 NamespaceDetails useEffect triggered with namespaceId:', namespaceId);
     if (namespaceId) {
       fetchRegistries();
       fetchRevokedRegistriesCount();
     }
-  }, [namespaceId]);
+  }, [namespaceId, fetchRegistries, fetchRevokedRegistriesCount]);
 
   // Polling effect for bulk upload job status
   useEffect(() => {
@@ -617,84 +832,7 @@ export function NamespaceDetailsPage() {
         clearInterval(intervalId);
       }
     };
-  }, [uploadJobId, uploadLoading, completedFileNames, toast]);
-
-  const fetchRegistries = async () => {
-    try {
-      console.log("🔄 Fetching registries...");
-      setLoading(true);
-      const API_BASE_URL =
-        import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
-      const response = await fetch(
-        `${API_BASE_URL}/dedi/query/${namespaceId}`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const result: NamespaceQueryResponse = await response.json();
-      console.log("📊 Registries API response:", result);
-
-      if (result.message === "Resource retrieved successfully") {
-        // Group registries by registry_id and keep only the latest version of each
-        const registryMap = new Map<string, Registry>();
-
-        result.data.registries.forEach((registry) => {
-          const existingRegistry = registryMap.get(registry.registry_id);
-
-          if (!existingRegistry) {
-            // First time seeing this registry_id, add it
-            registryMap.set(registry.registry_id, registry);
-          } else {
-            // Registry already exists, keep the one with latest updated_at
-            const existingDate = new Date(
-              existingRegistry.updated_at
-            ).getTime();
-            const currentDate = new Date(registry.updated_at).getTime();
-
-            if (currentDate > existingDate) {
-              registryMap.set(registry.registry_id, registry);
-            }
-          }
-        });
-
-        // Convert map back to array and sort by updated_at in descending order
-        const uniqueRegistries = Array.from(registryMap.values()).sort(
-          (a, b) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        );
-
-        setRegistries(uniqueRegistries);
-        setNamespaceName(result.data.namespace_name);
-        setTotalRegistries(result.data.total_registries);
-        console.log(
-          "✅ Registries updated:",
-          uniqueRegistries.length,
-          "registries"
-        );
-      } else {
-        console.error("❌ Failed to fetch registries:", result.message);
-        toast({
-          title: "Error",
-          description: result.message || "Failed to fetch registries",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("❌ Error fetching registries:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch registries. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [uploadJobId, uploadLoading, completedFileNames, toast, fetchRegistries]);
 
   // Separate function for refreshing registries without affecting main loading state
   const refreshRegistries = async () => {
@@ -702,25 +840,57 @@ export function NamespaceDetailsPage() {
       console.log("🔄 Refreshing registries (silent)...");
       const API_BASE_URL =
         import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
-      const response = await fetch(
-        `${API_BASE_URL}/dedi/query/${namespaceId}`,
-        {
+      
+      // Fetch both active and revoked registries to ensure we get all registries
+      const [activeResponse, revokedResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
           method: "GET",
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },
+        }),
+        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      ]);
+
+      const [activeResult, revokedResult] = await Promise.all([
+        activeResponse.json(),
+        revokedResponse.json()
+      ]);
+
+      console.log("📊 Silent refresh active API response:", activeResult);
+      console.log("📊 Silent refresh revoked API response:", revokedResult);
+
+      // Combine registries from both responses
+      let allRegistries: Registry[] = [];
+      let namespaceName = "Loading...";
+      let totalRegistriesCount = 0;
+
+      if (activeResult.message === "Resource retrieved successfully") {
+        allRegistries = [...allRegistries, ...activeResult.data.registries];
+        namespaceName = activeResult.data.namespace_name;
+        totalRegistriesCount += activeResult.data.total_registries;
+      }
+
+      if (revokedResult.message === "Resource retrieved successfully") {
+        allRegistries = [...allRegistries, ...revokedResult.data.registries];
+        if (namespaceName === "Loading...") {
+          namespaceName = revokedResult.data.namespace_name;
         }
-      );
+        totalRegistriesCount += revokedResult.data.total_registries;
+      }
 
-      const result: NamespaceQueryResponse = await response.json();
-      console.log("📊 Silent refresh API response:", result);
-
-      if (result.message === "Resource retrieved successfully") {
+      if (allRegistries.length > 0) {
         // Group registries by registry_id and keep only the latest version of each
         const registryMap = new Map<string, Registry>();
 
-        result.data.registries.forEach((registry) => {
+        allRegistries.forEach((registry) => {
           const existingRegistry = registryMap.get(registry.registry_id);
 
           if (!existingRegistry) {
@@ -743,13 +913,20 @@ export function NamespaceDetailsPage() {
             new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         );
 
+        // Filter registries into active and revoked arrays
+        const activeRegs = uniqueRegistries.filter(registry => !registry.is_revoked);
+        const revokedRegs = uniqueRegistries.filter(registry => registry.is_revoked);
+
         setRegistries(uniqueRegistries);
-        setNamespaceName(result.data.namespace_name);
-        setTotalRegistries(result.data.total_registries);
+        setActiveRegistries(activeRegs);
+        setRevokedRegistries(revokedRegs);
+        setNamespaceName(namespaceName);
+        setTotalRegistries(totalRegistriesCount);
         console.log(
           "✅ Registries silently refreshed:",
           uniqueRegistries.length,
-          "registries"
+          "registries",
+          `(${activeRegs.length} active, ${revokedRegs.length} revoked)`
         );
 
         // Also refresh revoked registries count
@@ -757,8 +934,13 @@ export function NamespaceDetailsPage() {
 
         return true;
       } else {
-        console.error("❌ Failed to refresh registries:", result.message);
-        return false;
+        console.log("ℹ️ No registries found during silent refresh");
+        setRegistries([]);
+        setActiveRegistries([]);
+        setRevokedRegistries([]);
+        setNamespaceName(namespaceName);
+        setTotalRegistries(0);
+        return true;
       }
     } catch (error) {
       console.error("❌ Error refreshing registries:", error);
@@ -766,43 +948,7 @@ export function NamespaceDetailsPage() {
     }
   };
 
-  const fetchRevokedRegistriesCount = async () => {
-    try {
-      console.log("🔄 Fetching revoked registries count...");
-      const API_BASE_URL =
-        import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
-      const response = await fetch(
-        `${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
 
-      const result: NamespaceQueryResponse = await response.json();
-      console.log("📊 Revoked registries API response:", result);
-
-      if (result.message === "Resource retrieved successfully") {
-        setRevokedRegistriesCount(result.data.total_registries);
-        console.log(
-          "✅ Revoked registries count updated:",
-          result.data.total_registries
-        );
-      } else {
-        console.log(
-          "ℹ️ No revoked registries found or API error:",
-          result.message
-        );
-        setRevokedRegistriesCount(0);
-      }
-    } catch (error) {
-      console.error("❌ Error fetching revoked registries count:", error);
-      setRevokedRegistriesCount(0);
-    }
-  };
 
   const handleCreateRegistry = async () => {
     if (createLoading) return; // Prevent multiple submissions
@@ -832,52 +978,19 @@ export function NamespaceDetailsPage() {
       // Handle schema based on selected type
       let parsedSchema: { [key: string]: string } = {};
 
-      if (selectedSchemaType === "blank") {
-        // Validate schema fields for blank schema
-        const validSchemaFields = schemaFields.filter(
-          (field) => field.key.trim() !== ""
-        );
-        if (validSchemaFields.length === 0) {
-          toast({
-            title: "Validation Error",
-            description: "At least one schema field is required",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Check for duplicate keys
-        const keys = validSchemaFields.map((field) => field.key.trim());
-        const uniqueKeys = new Set(keys);
-        if (keys.length !== uniqueKeys.size) {
-          toast({
-            title: "Validation Error",
-            description: "Schema field keys must be unique",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Convert schema fields to an object with string keys and string values.
-        parsedSchema = validSchemaFields.reduce((acc, field) => {
-          acc[field.key.trim()] = String(field.type);
-          return acc;
-        }, {} as { [key: string]: string });
+      // Use dynamic schema extraction from JSON files
+      const schemaConfig =
+        schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs];
+      if (schemaConfig && schemaConfig.schema) {
+        const extractedSchema = extractSchemaProperties(schemaConfig.schema);
+        parsedSchema = convertSchemaForAPI(extractedSchema);
       } else {
-        // Use dynamic schema extraction from JSON files
-        const schemaConfig =
-          schemaConfigs[selectedSchemaType as keyof typeof schemaConfigs];
-        if (schemaConfig && schemaConfig.schema) {
-          const extractedSchema = extractSchemaProperties(schemaConfig.schema);
-          parsedSchema = convertSchemaForAPI(extractedSchema);
-        } else {
-          toast({
-            title: "Schema Error",
-            description: "Selected schema type is not available",
-            variant: "destructive",
-          });
-          return;
-        }
+        toast({
+          title: "Schema Error",
+          description: "Selected schema type is not available",
+          variant: "destructive",
+        });
+        return;
       }
 
       // Parse metadata (optional)
@@ -960,8 +1073,7 @@ export function NamespaceDetailsPage() {
         setSchemaFields([{ key: "", type: "string" }]);
         setShowCreateMetadata(false);
         setShowSchemaBuilder(false);
-        setSelectedSchemaType("blank");
-        setShowSchemaBuilder(false);
+        setSelectedSchemaType("membership");
         // Refresh the registries list
         await refreshRegistries();
       } else {
@@ -1625,29 +1737,37 @@ export function NamespaceDetailsPage() {
         </div>
       )}
 
-      <Breadcrumb className="mb-4">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbPage>{namespaceName}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Your Registries</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage and organize your registries in this namespace (
-          {totalRegistries} total registries,{" "}
-          {registries.filter((r) => !r.is_revoked && !r.is_archived).length}{" "}
-          active registries)
-        </p>
+      {/* Navigation */}
+      <div className="flex items-center gap-4 mb-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(-1)}
+          className="shrink-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage>{namespaceName}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
-
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Your Registries</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage and organize your registries in this namespace
+          </p>
+        </div>
         <div className="flex gap-4">
           <Button
             onClick={() => {
               setIsCreateModalOpen(true);
-              setSelectedSchemaType("blank");
+              setSelectedSchemaType("membership");
               setShowSchemaBuilder(false);
               setCreateFormData({
                 name: "",
@@ -1659,7 +1779,6 @@ export function NamespaceDetailsPage() {
               setSchemaFields([{ key: "", type: "string" }]);
               setShowCreateMetadata(false);
             }}
-            className="px-8 py-6 text-lg"
           >
             <Plus className="mr-2 h-4 w-4" />
             Create Registry
@@ -1667,25 +1786,34 @@ export function NamespaceDetailsPage() {
           <Button
             variant="outline"
             onClick={() => setIsBulkUploadModalOpen(true)}
-            className="px-8 py-6 text-lg"
           >
             <Upload className="mr-2 h-4 w-4" />
             Bulk Upload
           </Button>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/namespaces/${namespaceId}/revoked`)}
-          className="px-8 py-6 text-lg relative"
-        >
-          <Ban className="mr-2 h-4 w-4" />
-          Revoked Registries
-          {revokedRegistriesCount > 0 && (
-            <Badge variant="destructive" className="ml-2 px-2 py-1 text-xs">
-              {revokedRegistriesCount}
-            </Badge>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-8">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search registries..."
+            value={searchQuery}
+            onChange={(e) => handleSearchInputChange(e.target.value)}
+            className="pl-10 pr-10"
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSearch}
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           )}
-        </Button>
+        </div>
       </div>
 
       {registries.length === 0 ? (
@@ -1696,117 +1824,286 @@ export function NamespaceDetailsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {registries.map((registry) => (
-            <Card
-              key={registry.registry_id}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleRegistryClick(registry)}
-            >
-              <CardHeader className="flex flex-row items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <CardTitle className="truncate">
-                    {registry.registry_name}
-                  </CardTitle>
-                  <CardDescription>{registry.description}</CardDescription>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    asChild
-                    onClick={(e) => e.stopPropagation()}
+        <div className="space-y-8">
+          {/* Active Registries Section */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">
+                Active Registries ({activeRegistries.length})
+              </h2>
+              {activeRegistries.length > 3 && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate(`/namespaces/${namespaceId}/active`)}
+                >
+                  View More
+                </Button>
+              )}
+            </div>
+            {activeRegistries.length === 0 ? (
+              <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
+                <div className="text-sm font-medium mb-1">No active registries found</div>
+                <p className="text-sm text-muted-foreground">
+                  Get started by creating your first registry
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeRegistries.slice(0, 3).map((registry) => (
+                  <Card
+                    key={registry.registry_id}
+                    className="hover:shadow-lg transition-shadow cursor-pointer"
+                    onClick={() => handleRegistryClick(registry)}
                   >
-                    <Button variant="ghost" size="icon" className="ml-auto">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    onClick={(e) => e.stopPropagation()}
+                    <CardHeader className="flex flex-row items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="truncate">
+                          {registry.registry_name}
+                        </CardTitle>
+                        <CardDescription>
+                          <TruncatedText text={registry.description} maxLength={100} />
+                        </CardDescription>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          asChild
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button variant="ghost" size="icon" className="ml-auto">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuItem
+                            onClick={() => handleOpenUpdateModal(registry)}
+                          >
+                            Update
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedRegistry(registry);
+                              setIsDelegateModalOpen(true);
+                            }}
+                          >
+                            Delegate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {registry.is_archived ? (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenRestoreAlert(registry)}
+                              className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Restore
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenArchiveAlert(registry)}
+                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Archive className="mr-2 h-4 w-4" />
+                              Archive
+                            </DropdownMenuItem>
+                          )}
+                          {registry.is_revoked ? (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenReinstateAlert(registry)}
+                              className="text-blue-600 focus:text-blue-600 focus:bg-blue-50"
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Reinstate
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenRevokeAlert(registry)}
+                              className="text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                            >
+                              <Ban className="mr-2 h-4 w-4" />
+                              Revoke
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">
+                          Created:{" "}
+                          {new Date(registry.created_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Updated:{" "}
+                          {new Date(registry.updated_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Records: {registry.record_count || 0}
+                        </p>
+                      </div>
+                      {(registry.is_archived || registry.is_revoked) && (
+                        <div className="mt-2 flex gap-2">
+                          {registry.is_archived && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <Archive className="mr-1 h-3 w-3" />
+                              Archived
+                            </span>
+                          )}
+                          {registry.is_revoked && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <Ban className="mr-1 h-3 w-3" />
+                              Revoked
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Revoked Registries Section */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">
+                Revoked Registries ({revokedRegistries.length})
+              </h2>
+              {revokedRegistries.length > 3 && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate(`/namespaces/${namespaceId}/revoked`)}
+                >
+                  View More
+                </Button>
+              )}
+            </div>
+            {revokedRegistries.length === 0 ? (
+              <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
+                <div className="text-sm font-medium mb-1">No revoked registries found</div>
+                <p className="text-sm text-muted-foreground">
+                  All registries in this namespace are currently active
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {revokedRegistries.slice(0, 3).map((registry) => (
+                  <Card
+                    key={registry.registry_id}
+                    className="hover:shadow-lg transition-shadow cursor-pointer"
+                    onClick={() => handleRegistryClick(registry)}
                   >
-                    <DropdownMenuItem
-                      onClick={() => handleOpenUpdateModal(registry)}
-                    >
-                      Update
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setSelectedRegistry(registry);
-                        setIsDelegateModalOpen(true);
-                      }}
-                    >
-                      Delegate
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {registry.is_archived ? (
-                      <DropdownMenuItem
-                        onClick={() => handleOpenRestoreAlert(registry)}
-                        className="text-green-600 focus:text-green-600 focus:bg-green-50"
-                      >
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Restore
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem
-                        onClick={() => handleOpenArchiveAlert(registry)}
-                        className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                      >
-                        <Archive className="mr-2 h-4 w-4" />
-                        Archive
-                      </DropdownMenuItem>
-                    )}
-                    {registry.is_revoked ? (
-                      <DropdownMenuItem
-                        onClick={() => handleOpenReinstateAlert(registry)}
-                        className="text-blue-600 focus:text-blue-600 focus:bg-blue-50"
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Reinstate
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem
-                        onClick={() => handleOpenRevokeAlert(registry)}
-                        className="text-orange-600 focus:text-orange-600 focus:bg-orange-50"
-                      >
-                        <Ban className="mr-2 h-4 w-4" />
-                        Revoke
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Created:{" "}
-                    {new Date(registry.created_at).toLocaleDateString()}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Updated:{" "}
-                    {new Date(registry.updated_at).toLocaleDateString()}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Records: {registry.record_count || 0}
-                  </p>
-                </div>
-                {(registry.is_archived || registry.is_revoked) && (
-                  <div className="mt-2 flex gap-2">
-                    {registry.is_archived && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        <Archive className="mr-1 h-3 w-3" />
-                        Archived
-                      </span>
-                    )}
-                    {registry.is_revoked && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        <Ban className="mr-1 h-3 w-3" />
-                        Revoked
-                      </span>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                    <CardHeader className="flex flex-row items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="truncate">
+                          {registry.registry_name}
+                        </CardTitle>
+                        <CardDescription>
+                          <TruncatedText text={registry.description} maxLength={100} />
+                        </CardDescription>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          asChild
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button variant="ghost" size="icon" className="ml-auto">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuItem
+                            onClick={() => handleOpenUpdateModal(registry)}
+                          >
+                            Update
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedRegistry(registry);
+                              setIsDelegateModalOpen(true);
+                            }}
+                          >
+                            Delegate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {registry.is_archived ? (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenRestoreAlert(registry)}
+                              className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Restore
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenArchiveAlert(registry)}
+                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Archive className="mr-2 h-4 w-4" />
+                              Archive
+                            </DropdownMenuItem>
+                          )}
+                          {registry.is_revoked ? (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenReinstateAlert(registry)}
+                              className="text-blue-600 focus:text-blue-600 focus:bg-blue-50"
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Reinstate
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenRevokeAlert(registry)}
+                              className="text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                            >
+                              <Ban className="mr-2 h-4 w-4" />
+                              Revoke
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">
+                          Created:{" "}
+                          {new Date(registry.created_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Updated:{" "}
+                          {new Date(registry.updated_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Records: {registry.record_count || 0}
+                        </p>
+                      </div>
+                      {(registry.is_archived || registry.is_revoked) && (
+                        <div className="mt-2 flex gap-2">
+                          {registry.is_archived && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <Archive className="mr-1 h-3 w-3" />
+                              Archived
+                            </span>
+                          )}
+                          {registry.is_revoked && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <Ban className="mr-1 h-3 w-3" />
+                              Revoked
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1993,95 +2290,30 @@ export function NamespaceDetailsPage() {
                 })}
               </div>
 
-              {/* Schema Builder - Only show for Blank Schema */}
-              {selectedSchemaType === "blank" && showSchemaBuilder && (
-                <div className="space-y-4 border-t pt-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Schema Fields</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addSchemaField}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Field
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {schemaFields.map((field, index) => (
-                      <div key={index} className="flex gap-2 items-center">
-                        <Input
-                          placeholder="Field name (alphanumeric, _, - only)"
-                          value={field.key}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            // Only allow alphanumeric characters, hyphens, and underscores
-                            const filteredValue = value.replace(
-                              /[^a-zA-Z0-9_-]/g,
-                              ""
-                            );
-                            updateSchemaField(index, "key", filteredValue);
-                          }}
-                          className="flex-1"
-                        />
-                        <Select
-                          value={field.type}
-                          onValueChange={(value) =>
-                            updateSchemaField(index, "type", value)
-                          }
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="string">string</SelectItem>
-                            <SelectItem value="integer">integer</SelectItem>
-                            <SelectItem value="float">float</SelectItem>
-                            <SelectItem value="boolean">boolean</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {schemaFields.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => removeSchemaField(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+              {/* Schema Preview */}
+              <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                <div className="text-center mb-3">
+                  <p className="text-sm font-medium text-gray-700">
+                    {
+                      schemaConfigs[
+                        selectedSchemaType as keyof typeof schemaConfigs
+                      ]?.name
+                    }{" "}
+                    schema will be applied
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {
+                      schemaConfigs[
+                        selectedSchemaType as keyof typeof schemaConfigs
+                      ]?.description
+                    }
+                  </p>
                 </div>
-              )}
 
-              {/* Preview for other schema types */}
-              {selectedSchemaType !== "blank" && (
-                <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-                  <div className="text-center mb-3">
-                    <p className="text-sm font-medium text-gray-700">
-                      {
-                        schemaConfigs[
-                          selectedSchemaType as keyof typeof schemaConfigs
-                        ]?.name
-                      }{" "}
-                      schema will be applied
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {
-                        schemaConfigs[
-                          selectedSchemaType as keyof typeof schemaConfigs
-                        ]?.description
-                      }
-                    </p>
-                  </div>
-
-                  {/* Show schema fields preview only */}
-                  {schemaConfigs[
-                    selectedSchemaType as keyof typeof schemaConfigs
-                  ]?.schema && (
+                {/* Show schema fields preview only */}
+                {schemaConfigs[
+                  selectedSchemaType as keyof typeof schemaConfigs
+                ]?.schema && (
                     <div className="space-y-4">
                       <p className="text-xs font-medium text-gray-600">
                         Schema Fields Preview:
@@ -2160,8 +2392,7 @@ export function NamespaceDetailsPage() {
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+              </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -2443,11 +2674,13 @@ export function NamespaceDetailsPage() {
                             let value: unknown = e.target.value;
                             // Try to parse as JSON if it looks like an object
                             if (
-                              value.startsWith("{") ||
-                              value.startsWith("[")
+                              typeof value === "string" && (
+                                value.startsWith("{") ||
+                                value.startsWith("[")
+                              )
                             ) {
                               try {
-                                value = JSON.parse(value);
+                                value = JSON.parse(value as string);
                               } catch {
                                 // Keep as string if parsing fails
                               }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Eye, Info } from 'lucide-react';
+import { Plus, Upload, MoreVertical, Eye, Info, ArrowLeft, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -88,8 +88,8 @@ interface AddRecordFormData {
   record_name: string;
   description: string;
   details: { [key: string]: string };
-  meta: { [key: string]: any };
-  arrayFields: { [key: string]: any[] }; // Add array fields support
+  meta: { [key: string]: unknown };
+  arrayFields: { [key: string]: unknown[] }; // Add array fields support
 }
 
 // Interface for add record API response
@@ -98,6 +98,29 @@ interface AddRecordApiResponse {
   data: {
     record_id: string;
   };
+}
+
+// Interface for search record
+interface SearchRecord {
+  id: string;
+  registry_name: string;
+  record_name: string;
+  details: { [key: string]: unknown };
+  created_at: string;
+  updated_at: string;
+  namespace_id: string;
+}
+
+// Interface for search response
+interface SearchResponse {
+  message: string;
+  data: SearchRecord[];
+}
+
+// Interface for search field
+interface SearchField {
+  key: string;
+  value: string;
 }
 
 // Define array field configurations based on schema
@@ -109,13 +132,33 @@ const arrayFieldConfigs: { [key: string]: { [key: string]: string } } = {
   }
 };
 
+// Define required fields for each schema type
+const getRequiredFields = (schemaType: string): string[] => {
+  switch (schemaType) {
+    case 'membership':
+      return ['membership_id', 'detail_name']; // detail.name becomes detail_name in flattened form
+    case 'publicKey':
+      return ['public_key_id', 'publicKey', 'keyType']; // entity is not required at root level
+    case 'revoke':
+      return ['revoked_id'];
+    default:
+      return [];
+  }
+};
+
+// Helper function to check if a field is required
+const isFieldRequired = (fieldKey: string, schemaType: string): boolean => {
+  const requiredFields = getRequiredFields(schemaType);
+  return requiredFields.includes(fieldKey);
+};
+
 export function RecordsPage() {
   const { namespaceId, registryName } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   
   const [records, setRecords] = useState<RecordItem[]>([]);
-  const [schema, setSchema] = useState<{ [key: string]: any }>({});
+  const [schema, setSchema] = useState<{ [key: string]: unknown }>({});
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [registryDisplayName, setRegistryDisplayName] = useState<string>('Loading...');
   const [totalRecords, setTotalRecords] = useState<number>(0);
@@ -130,6 +173,144 @@ export function RecordsPage() {
     meta: {},
     arrayFields: {},
   });
+
+  // State for tracking missing required fields
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+
+  // Get schema type from registry name or schema properties
+  const getSchemaType = (): string => {
+    // Try to determine from registry name first
+    if (registryDisplayName.toLowerCase().includes('membership')) return 'membership';
+    if (registryDisplayName.toLowerCase().includes('public') || registryDisplayName.toLowerCase().includes('key')) return 'publicKey';
+    if (registryDisplayName.toLowerCase().includes('revoke')) return 'revoke';
+    
+    // Try to determine from schema properties
+    const schemaProperties = schema.properties || schema;
+    const fieldNames = Object.keys(schemaProperties);
+    
+    if (fieldNames.includes('membership_id') || fieldNames.includes('detail')) return 'membership';
+    if (fieldNames.includes('public_key_id') || fieldNames.includes('publicKey')) return 'publicKey';
+    if (fieldNames.includes('revoked_id')) return 'revoke';
+    
+    return 'unknown';
+  };
+
+  // Search functionality state
+  const [searchFields, setSearchFields] = useState<SearchField[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchRecord[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [allRecords, setAllRecords] = useState<RecordItem[]>([]);
+
+  // Get all available search fields (record_name + schema fields)
+  const getAvailableSearchFields = () => {
+    const schemaProperties = schema.properties || schema;
+    const schemaFields = Object.keys(schemaProperties);
+    return ['record_name', ...schemaFields];
+  };
+
+  // Initialize search with one empty field
+  useEffect(() => {
+    if (Object.keys(schema).length > 0 && searchFields.length === 0) {
+      setSearchFields([{ key: 'record_name', value: '' }]);
+    }
+  }, [schema, searchFields.length]);
+
+  // Search function
+  const handleSearch = async () => {
+    const activeFields = searchFields.filter(field => field.key && field.value.trim());
+    
+    if (activeFields.length === 0) {
+      setShowSearchResults(false);
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
+      
+      // Build query parameters
+      const searchParams = new URLSearchParams();
+      searchParams.append('registry_name', registryName || '');
+      
+      activeFields.forEach(field => {
+        searchParams.append(field.key, field.value.trim());
+      });
+      
+      const response = await fetch(
+        `${API_BASE_URL}/dedi/search/${namespaceId}?${searchParams.toString()}`,
+        {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result: SearchResponse = await response.json();
+      console.log("🔍 Search API response:", result);
+
+      if (result.message === "Search results") {
+        setSearchResults(result.data);
+        setShowSearchResults(true);
+        console.log("✅ Search results updated:", result.data.length, "records found");
+      } else {
+        console.log("ℹ️ No search results found:", result.message);
+        setSearchResults([]);
+        setShowSearchResults(true);
+      }
+    } catch (error) {
+      console.error("❌ Error searching records:", error);
+      toast({
+        title: "Search Error",
+        description: "Failed to search records. Please try again.",
+        variant: "destructive",
+      });
+      setSearchResults([]);
+      setShowSearchResults(false);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Add search field
+  const addSearchField = () => {
+    const availableFields = getAvailableSearchFields();
+    const usedFields = searchFields.map(f => f.key);
+    const nextField = availableFields.find(field => !usedFields.includes(field));
+    
+    if (nextField) {
+      setSearchFields([...searchFields, { key: nextField, value: '' }]);
+    }
+  };
+
+  // Remove search field
+  const removeSearchField = (index: number) => {
+    if (searchFields.length > 1) {
+      setSearchFields(searchFields.filter((_, i) => i !== index));
+    }
+  };
+
+  // Update search field
+  const updateSearchField = (index: number, key: string, value: string) => {
+    const newFields = [...searchFields];
+    newFields[index] = { key, value };
+    setSearchFields(newFields);
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchFields([{ key: 'record_name', value: '' }]);
+    setSearchResults([]);
+    setShowSearchResults(false);
+  };
+
+  // Handle clicking on a search result
+  const handleSearchResultClick = (record: SearchRecord) => {
+    navigate(`/${namespaceId}/${registryName}/${record.record_name}`);
+  };
 
   useEffect(() => {
     if (namespaceId && registryName) {
@@ -203,7 +384,7 @@ export function RecordsPage() {
     
     // Initialize form with empty details based on schema
     const initialDetails: { [key: string]: string } = {};
-    const initialArrayFields: { [key: string]: any[] } = {};
+    const initialArrayFields: { [key: string]: unknown[] } = {};
     
     // Handle both simple schema format and JSON schema format
     const schemaProperties = schema.properties || schema;
@@ -308,36 +489,33 @@ export function RecordsPage() {
         return;
       }
 
-      // Validate required schema fields
-      const schemaProperties = schema.properties || schema;
-      const missingFields = Object.keys(schemaProperties).filter(field => {
-        const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
-        const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
-        
-        if (fieldType === 'array') {
-          // For array fields, check if at least one valid item exists
-          const arrayItems = addFormData.arrayFields[field] || [];
-          const validItems = arrayItems.filter(item => 
-            Object.values(item).some(val => val && String(val).trim() !== '')
-          );
-          return validItems.length === 0;
-        } else {
-          // For regular fields, check if value exists
-          return !addFormData.details[field] || !addFormData.details[field].trim();
+      // Validate required schema fields based on schema type
+      const schemaType = getSchemaType();
+      const requiredFields = getRequiredFields(schemaType);
+      const currentMissingFields: string[] = [];
+
+      // Check each required field
+      requiredFields.forEach(fieldKey => {
+        const value = addFormData.details[fieldKey];
+        if (!value || !value.trim()) {
+          currentMissingFields.push(fieldKey);
         }
       });
 
-      if (missingFields.length > 0) {
+      // Update missing fields state for UI highlighting
+      setMissingFields(currentMissingFields);
+
+      if (currentMissingFields.length > 0) {
         toast({
           title: 'Validation Error',
-          description: `Please fill in the following required fields: ${missingFields.join(', ')}`,
+          description: `Please fill in the following required fields: ${currentMissingFields.join(', ')}`,
           variant: 'destructive',
         });
         return;
       }
 
       // Prepare details with proper type conversion
-      const finalDetails: { [key: string]: string | number | boolean | any[] } = {};
+      const finalDetails: { [key: string]: string | number | boolean | unknown[] } = {};
       
       // Convert form data to proper types based on schema
       const schemaProps = schema.properties || schema;
@@ -548,30 +726,176 @@ export function RecordsPage() {
 
   return (
     <div className="container mx-auto px-4 py-12">
-      <Breadcrumb className="mb-4">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink href={`/namespaces/${namespaceId}`}>{namespaceName}</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{registryDisplayName}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Records</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage records in {registryDisplayName} ({totalRecords} total records)
-        </p>
+      {/* Navigation */}
+      <div className="flex items-center gap-4 mb-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(-1)}
+          className="shrink-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={`/namespaces/${namespaceId}`}>{namespaceName}</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{registryDisplayName}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
 
-      <div className="flex justify-start gap-4 mb-8">
-        <Button onClick={handleOpenAddModal} className="px-8 py-6 text-lg">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Records</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage records in {registryDisplayName} ({totalRecords} total records)
+          </p>
+        </div>
+        <Button onClick={handleOpenAddModal}>
           <Plus className="mr-2 h-4 w-4" />
           Add Record
         </Button>
+      </div>
+
+      {/* Advanced Search Bar */}
+      <div className="mb-8">
+        <div className="bg-gray-50 p-4 rounded-lg border">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium">Search Records</h3>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={addSearchField}
+                disabled={searchFields.length >= getAvailableSearchFields().length}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Field
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearSearch}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Clear
+              </Button>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            {searchFields.map((field, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <Select
+                  value={field.key}
+                  onValueChange={(value) => updateSearchField(index, value, field.value)}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem key="record_name" value="record_name">
+                      Record Name
+                    </SelectItem>
+                    {Object.keys(schema.properties || schema).map((schemaField) => (
+                      <SelectItem key={schemaField} value={schemaField}>
+                        {schemaField}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Input
+                  placeholder="Enter search value"
+                  value={field.value}
+                  onChange={(e) => updateSearchField(index, field.key, e.target.value)}
+                  className="flex-1"
+                />
+                
+                {searchFields.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSearchField(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex justify-end mt-4">
+            <Button onClick={handleSearch} disabled={isSearching}>
+              {isSearching ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 h-4 w-4" />
+                  Search
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+        
+        {/* Search Results */}
+        {showSearchResults && (
+          <div className="mt-4 bg-white border rounded-lg shadow-sm">
+            <div className="p-4 border-b">
+              <h4 className="font-medium">Search Results</h4>
+            </div>
+            {searchResults.length === 0 ? (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">No records found matching your search criteria</p>
+              </div>
+            ) : (
+              <div className="divide-y max-h-96 overflow-y-auto">
+                {searchResults.map((record) => (
+                  <div
+                    key={record.id}
+                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => handleSearchResultClick(record)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-900 truncate">
+                          {record.record_name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Updated: {new Date(record.updated_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {/* Show matching field details */}
+                    {record.details && Object.keys(record.details).length > 0 && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {Object.entries(record.details).slice(0, 3).map(([key, value]) => (
+                          <span key={key} className="mr-4">
+                            <strong>{key}:</strong> {String(value).substring(0, 30)}
+                            {String(value).length > 30 ? '...' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {records.length === 0 ? (
@@ -720,7 +1044,8 @@ export function RecordsPage() {
                       <div key={field} className="space-y-3">
                         <div className="flex items-center justify-between">
                           <Label>
-                            {field} 
+                            {field}
+                            {isFieldRequired(field, getSchemaType()) && <span className="text-red-500 ml-1">*</span>}
                             <span className="text-muted-foreground ml-1">({fieldType})</span>
                           </Label>
                           <Button
@@ -775,7 +1100,8 @@ export function RecordsPage() {
                   return (
                     <div key={field} className="space-y-2">
                       <Label htmlFor={`add-detail-${field}`}>
-                        {field} 
+                        {field}
+                        {isFieldRequired(field, getSchemaType()) && <span className="text-red-500 ml-1">*</span>}
                         <span className="text-muted-foreground ml-1">({fieldType})</span>
                       </Label>
                       {isBoolean ? (
@@ -783,7 +1109,7 @@ export function RecordsPage() {
                           value={addFormData.details[field] || ''}
                           onValueChange={(value: string) => handleDetailsChange(field, value)}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className={missingFields.includes(field) ? 'border-red-500 focus:border-red-500' : ''}>
                             <SelectValue placeholder="Select true or false" />
                           </SelectTrigger>
                           <SelectContent>
@@ -803,6 +1129,7 @@ export function RecordsPage() {
                               : `Enter ${field}`
                           }
                           step={fieldType === 'float' || fieldType === 'double' || fieldType === 'number' ? 'any' : undefined}
+                          className={missingFields.includes(field) ? 'border-red-500 focus:border-red-500' : ''}
                         />
                       )}
                     </div>

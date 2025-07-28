@@ -252,7 +252,7 @@ export function RecordDetailsPage() {
       // Cookie authentication is handled automatically by credentials: 'include'
 
       // Convert details based on schema types
-      const typedDetails: { [key: string]: any } = {};
+      const typedDetails: { [key: string]: unknown } = {};
       if (recordDetails) {
         Object.keys(recordDetails.schema).forEach(field => {
           const value = updateFormData.details[field];
@@ -313,16 +313,18 @@ export function RecordDetailsPage() {
       const result = await response.json();
       console.log('Update API response:', result);
 
-      if (response.ok && (result.message === "Record updated successfully" || result.message === "Record has been updated")) {
+      if (response.ok) {
+        // If response is successful (200-299), show success toast
         toast({
           title: 'Success',
-          description: 'Record updated successfully',
+          description: result.message || 'Record updated successfully',
         });
         setIsUpdateModalOpen(false);
         
         // Refresh record details to show updated data
         await fetchRecordDetails();
       } else {
+        // Only show error toast for non-successful responses
         toast({
           title: 'Error',
           description: result.message || 'Failed to update record',
