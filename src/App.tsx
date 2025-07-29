@@ -5,6 +5,7 @@ import { AuthProvider } from '@/lib/auth-context';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { HomePage } from '@/pages/Home';
 import { SignupPage } from '@/pages/Signup';
+import { LoginPage } from '@/pages/Login';
 import { AuthVerifyPage } from '@/pages/AuthVerify';
 import { DashboardPage } from '@/pages/Dashboard';
 import { OwnedNamespacesPage } from '@/pages/OwnedNamespaces';
@@ -23,7 +24,9 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/verify" element={<AuthVerifyPage />} />
+            <Route path="/auth/magic/:token" element={<AuthVerifyPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/namespaces/owned" element={<OwnedNamespacesPage />} />
             <Route path="/namespaces/shared" element={<SharedNamespacesPage />} />

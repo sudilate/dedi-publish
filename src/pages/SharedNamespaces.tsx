@@ -125,7 +125,7 @@ export function SharedNamespacesPage() {
   }
 
   const handleNamespaceClick = (namespaceId: string) => {
-    navigate(`/namespaces/${namespaceId}`);
+    navigate(`/namespaces/${namespaceId}?type=delegated`);
   };
 
   const handleVerifyNamespace = async (namespace: Namespace) => {
@@ -142,7 +142,7 @@ export function SharedNamespacesPage() {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as any;
 
       if (response.ok) {
         setDelegatedNamespaces(prev =>

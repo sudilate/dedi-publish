@@ -1,11 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  AlertCircle,
-  MoreVertical,
-  ArrowLeft,
-  Check,
-} from "lucide-react";
+import { AlertCircle, MoreVertical, ArrowLeft, Check } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { getNamespacesByProfile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -68,15 +63,18 @@ export function OwnedNamespacesPage() {
 
       if (result.message === "User namespaces retrieved successfully") {
         // Process owned namespaces
-        const ownedNamespacesWithProps = (result.data.owned_namespaces || []).map(
-          (namespace: Namespace) => ({
-            ...namespace,
-            verified: false,
-            dnsTxt: null,
-          })
-        );
+        const ownedNamespacesWithProps = (
+          result.data.owned_namespaces || []
+        ).map((namespace: Namespace) => ({
+          ...namespace,
+          verified: false,
+          dnsTxt: null,
+        }));
 
-        console.log("✅ Setting owned namespaces in state:", ownedNamespacesWithProps);
+        console.log(
+          "✅ Setting owned namespaces in state:",
+          ownedNamespacesWithProps
+        );
         setOwnedNamespaces(ownedNamespacesWithProps);
       } else {
         if (result.message !== "No namespaces found") {
@@ -125,12 +123,13 @@ export function OwnedNamespacesPage() {
   }
 
   const handleNamespaceClick = (namespaceId: string) => {
-    navigate(`/namespaces/${namespaceId}`);
+    navigate(`/namespaces/${namespaceId}?type=owned`);
   };
 
   const handleVerifyNamespace = async (namespace: Namespace) => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
+      const API_BASE_URL =
+        import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
       const response = await fetch(`${API_BASE_URL}/dedi/verify-domain`, {
         method: "POST",
         credentials: "include",
@@ -142,10 +141,10 @@ export function OwnedNamespacesPage() {
         }),
       });
 
-      const result = await response.json();
+      const result = (await response.json()) as unknown;
 
       if (response.ok) {
-        setOwnedNamespaces(prev =>
+        setOwnedNamespaces((prev) =>
           prev.map((ns) =>
             ns.namespace_id === namespace.namespace_id
               ? { ...ns, verified: true }
@@ -155,7 +154,8 @@ export function OwnedNamespacesPage() {
 
         toast({
           title: "✅ Verification Successful!",
-          description: result.message || "Domain has been successfully verified.",
+          description:
+            result.message || "Domain has been successfully verified.",
           className: "border-green-200 bg-green-50 text-green-900",
         });
       } else {
@@ -182,7 +182,7 @@ export function OwnedNamespacesPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate("/dashboard")}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -202,7 +202,9 @@ export function OwnedNamespacesPage() {
       {ownedNamespaces.length === 0 ? (
         <div className="text-center py-12">
           <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No owned namespaces found</h3>
+          <h3 className="text-lg font-medium mb-2">
+            No owned namespaces found
+          </h3>
           <p className="text-muted-foreground">
             You don't have any owned namespaces yet
           </p>
@@ -219,7 +221,10 @@ export function OwnedNamespacesPage() {
                 <div>
                   <CardTitle>{namespace.name}</CardTitle>
                   <CardDescription>
-                    <TruncatedText text={namespace.description} maxLength={100} />
+                    <TruncatedText
+                      text={namespace.description}
+                      maxLength={100}
+                    />
                   </CardDescription>
                 </div>
                 <DropdownMenu>
@@ -232,22 +237,20 @@ export function OwnedNamespacesPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenuItem>
-                      Update
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      Generate DNS TXT
-                    </DropdownMenuItem>
+                    <DropdownMenuItem>Update</DropdownMenuItem>
+                    <DropdownMenuItem>Generate DNS TXT</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">
-                    Created: {new Date(namespace.created_at).toLocaleDateString()}
+                    Created:{" "}
+                    {new Date(namespace.created_at).toLocaleDateString()}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Updated: {new Date(namespace.updated_at).toLocaleDateString()}
+                    Updated:{" "}
+                    {new Date(namespace.updated_at).toLocaleDateString()}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Registries: {namespace.registry_count || 0}
@@ -260,7 +263,9 @@ export function OwnedNamespacesPage() {
                         <TooltipTrigger asChild>
                           <div className="flex items-center gap-2 text-green-600">
                             <Check className="h-4 w-4" />
-                            <span className="text-sm font-medium">Verified</span>
+                            <span className="text-sm font-medium">
+                              Verified
+                            </span>
                           </div>
                         </TooltipTrigger>
                         <TooltipContent>

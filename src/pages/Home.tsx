@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Shield, Users, Zap, CheckCircle2, ArrowUpRight, TrendingUp, Database, FileText, Activity, BarChart3, PieChart, Users2 } from 'lucide-react';
+import { ArrowRight, Shield, Users, Zap, CheckCircle2, TrendingUp, Database, FileText, Activity, BarChart3, PieChart, Users2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -162,6 +162,9 @@ export function HomePage() {
               <Button size="lg" className="text-lg h-12 px-8" onClick={() => navigate('/signup')}>
                 Register
                 <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+              <Button size="lg" variant="outline" className="text-lg h-12 px-8" onClick={() => navigate('/login')}>
+                Login
               </Button>
             </div>
             <div className="flex justify-center gap-8 pt-12">

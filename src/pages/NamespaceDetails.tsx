@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Upload,
@@ -44,7 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/lib/auth-context";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,13 +76,13 @@ import revokeSchema from "@/schema/revoke.json";
 
 // Utility function to extract properties from JSON schema
 const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } => {
-  const properties = schema.properties || {};
+  const properties = (schema as any).properties || {};
   const extractedProps: { [key: string]: unknown } = {};
 
   const processProperty = (key: string, property: unknown): void => {
-    if (property.type) {
+    if ((property as any).type) {
       // Handle different types
-      switch (property.type) {
+      switch ((property as any).type) {
         case "string":
           extractedProps[key] = "string";
           break;
@@ -96,13 +96,13 @@ const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } =>
         case "array":
           // Handle array with nested object properties
           if (
-            property.items &&
-            property.items.type === "object" &&
-            property.items.properties
+            (property as any).items &&
+            (property as any).items.type === "object" &&
+            (property as any).items.properties
           ) {
             const itemProperties: { [key: string]: string } = {};
-            Object.keys(property.items.properties).forEach((itemKey) => {
-              const itemProperty = property.items.properties[itemKey];
+            Object.keys((property as any).items.properties).forEach((itemKey) => {
+              const itemProperty = (property as any).items.properties[itemKey];
               switch (itemProperty.type) {
                 case "string":
                   itemProperties[itemKey] = "string";
@@ -125,9 +125,9 @@ const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } =>
           break;
         case "object":
           // For objects, we'll flatten the nested properties
-          if (property.properties) {
-            Object.keys(property.properties).forEach((nestedKey) => {
-              const nestedProperty = property.properties[nestedKey];
+          if ((property as any).properties) {
+            Object.keys((property as unknown).properties).forEach((nestedKey) => {
+              const nestedProperty = (property as unknown).properties[nestedKey];
               processProperty(`${key}_${nestedKey}`, nestedProperty);
             });
           } else {
@@ -157,7 +157,7 @@ const convertSchemaForAPI = (extractedSchema: {
 
   Object.keys(extractedSchema).forEach((key) => {
     const value = extractedSchema[key];
-    if (typeof value === "object" && value.type === "array") {
+    if (typeof value === "object" && value && (value as unknown).type === "array") {
       // For array types, we'll store as 'array' in the API
       apiSchema[key] = "array";
     } else {
@@ -310,15 +310,17 @@ interface SearchResponse {
 
 export function NamespaceDetailsPage() {
   const { namespaceId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Get the type parameter to determine if this is an owned or delegated namespace
+  const namespaceType = searchParams.get('type') || 'owned';
   const [registries, setRegistries] = useState<Registry[]>([]);
   const [activeRegistries, setActiveRegistries] = useState<Registry[]>([]);
   const [revokedRegistries, setRevokedRegistries] = useState<Registry[]>([]);
   const [namespaceName, setNamespaceName] = useState<string>("Loading...");
-  const [totalRegistries, setTotalRegistries] = useState<number>(0);
-  const [revokedRegistriesCount, setRevokedRegistriesCount] =
-    useState<number>(0);
+
   const [loading, setLoading] = useState(true);
   const [createLoading, setCreateLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -367,13 +369,9 @@ export function NamespaceDetailsPage() {
   });
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [schemaFields, setSchemaFields] = useState<SchemaField[]>([
-    { key: "", type: "string" },
-  ]);
   const [showCreateMetadata, setShowCreateMetadata] = useState(false);
   const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
   const [selectedSchemaType, setSelectedSchemaType] = useState<string>("membership");
-  const [showSchemaBuilder, setShowSchemaBuilder] = useState(false);
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -431,20 +429,38 @@ export function NamespaceDetailsPage() {
   const fetchRegistries = useCallback(async () => {
     try {
       console.log("🔄 Fetching registries...");
+      console.log("🔍 Namespace type:", namespaceType);
       setLoading(true);
       const API_BASE_URL =
         import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
       
+      // Use different API endpoints based on namespace type
+      let activeEndpoint: string;
+      let revokedEndpoint: string;
+      
+      if (namespaceType === 'delegated') {
+        // For delegated namespaces, use the profile-specific endpoint
+        activeEndpoint = `${API_BASE_URL}/dedi/${namespaceId}/get-registry-by-profile`;
+        revokedEndpoint = `${API_BASE_URL}/dedi/${namespaceId}/get-registry-by-profile?status=revoked`;
+      } else {
+        // For owned namespaces, use the regular query endpoint
+        activeEndpoint = `${API_BASE_URL}/dedi/query/${namespaceId}`;
+        revokedEndpoint = `${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`;
+      }
+      
+      console.log("🌐 Active endpoint:", activeEndpoint);
+      console.log("🌐 Revoked endpoint:", revokedEndpoint);
+      
       // Fetch both active and revoked registries to ensure we get all registries
       const [activeResponse, revokedResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
+        fetch(activeEndpoint, {
           method: "GET",
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },
         }),
-        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`, {
+        fetch(revokedEndpoint, {
           method: "GET",
           credentials: "include",
           headers: {
@@ -466,18 +482,51 @@ export function NamespaceDetailsPage() {
       let namespaceName = "Loading...";
       let totalRegistriesCount = 0;
 
+      // Handle active registries response
       if (activeResult.message === "Resource retrieved successfully") {
-        allRegistries = [...allRegistries, ...activeResult.data.registries];
-        namespaceName = activeResult.data.namespace_name;
-        totalRegistriesCount += activeResult.data.total_registries;
+        // Owned namespace response structure
+        if (activeResult.data && activeResult.data.registries) {
+          allRegistries = [...allRegistries, ...activeResult.data.registries];
+          namespaceName = activeResult.data.namespace_name || namespaceName;
+          totalRegistriesCount += activeResult.data.total_registries || 0;
+        }
+      } else if (activeResult.message === "User registries retrieved successfully") {
+        // Delegated namespace response structure
+        if (Array.isArray(activeResult.data)) {
+          allRegistries = [...allRegistries, ...activeResult.data];
+          // For delegated namespaces, extract namespace name from the first registry or use namespaceId as fallback
+          if (activeResult.data.length > 0 && activeResult.data[0].namespace_name) {
+            namespaceName = activeResult.data[0].namespace_name;
+          } else if (namespaceId) {
+            namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
+          }
+          totalRegistriesCount += activeResult.data.length;
+        }
       }
 
+      // Handle revoked registries response
       if (revokedResult.message === "Resource retrieved successfully") {
-        allRegistries = [...allRegistries, ...revokedResult.data.registries];
-        if (namespaceName === "Loading...") {
-          namespaceName = revokedResult.data.namespace_name;
+        // Owned namespace response structure
+        if (revokedResult.data && revokedResult.data.registries) {
+          allRegistries = [...allRegistries, ...revokedResult.data.registries];
+          // Only update namespace name if we haven't set it yet
+          if (namespaceName === "Loading...") {
+            namespaceName = revokedResult.data.namespace_name || namespaceName;
+          }
+          totalRegistriesCount += revokedResult.data.total_registries || 0;
         }
-        totalRegistriesCount += revokedResult.data.total_registries;
+      } else if (revokedResult.message === "User registries retrieved successfully") {
+        // Delegated namespace response structure
+        if (Array.isArray(revokedResult.data)) {
+          allRegistries = [...allRegistries, ...revokedResult.data];
+          // Only update namespace name if we haven't set it yet and data is available
+          if (namespaceName === "Loading..." && revokedResult.data.length > 0 && revokedResult.data[0].namespace_name) {
+            namespaceName = revokedResult.data[0].namespace_name;
+          } else if (namespaceName === "Loading..." && namespaceId) {
+            namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
+          }
+          totalRegistriesCount += revokedResult.data.length;
+        }
       }
 
       if (allRegistries.length > 0) {
@@ -517,7 +566,6 @@ export function NamespaceDetailsPage() {
         setActiveRegistries(activeRegs);
         setRevokedRegistries(revokedRegs);
         setNamespaceName(namespaceName);
-        setTotalRegistries(totalRegistriesCount);
         console.log(
           "✅ Registries updated:",
           uniqueRegistries.length,
@@ -530,7 +578,6 @@ export function NamespaceDetailsPage() {
         setActiveRegistries([]);
         setRevokedRegistries([]);
         setNamespaceName(namespaceName);
-        setTotalRegistries(0);
       }
     } catch (error) {
       console.error("❌ Error fetching registries:", error);
@@ -542,29 +589,34 @@ export function NamespaceDetailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [namespaceId, toast]);
+  }, [namespaceId, namespaceType, toast]);
 
   const fetchRevokedRegistriesCount = useCallback(async () => {
     try {
       console.log("🔄 Fetching revoked registries count...");
       const API_BASE_URL =
         import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
-      const response = await fetch(
-        `${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      
+      // Use different API endpoint based on namespace type
+      let revokedEndpoint: string;
+      if (namespaceType === 'delegated') {
+        revokedEndpoint = `${API_BASE_URL}/dedi/${namespaceId}/get-registry-by-profile?status=revoked`;
+      } else {
+        revokedEndpoint = `${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`;
+      }
+      
+      const response = await fetch(revokedEndpoint, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       const result: NamespaceQueryResponse = await response.json();
       console.log("📊 Revoked registries API response:", result);
 
       if (result.message === "Resource retrieved successfully") {
-        setRevokedRegistriesCount(result.data.total_registries);
         console.log(
           "✅ Revoked registries count updated:",
           result.data.total_registries
@@ -574,13 +626,11 @@ export function NamespaceDetailsPage() {
           "ℹ️ No revoked registries found or API error:",
           result.message
         );
-        setRevokedRegistriesCount(0);
       }
     } catch (error) {
       console.error("❌ Error fetching revoked registries count:", error);
-      setRevokedRegistriesCount(0);
     }
-  }, [namespaceId]);
+  }, [namespaceId, namespaceType]);
 
   // Check for ongoing upload on component mount
   useEffect(() => {
@@ -838,19 +888,37 @@ export function NamespaceDetailsPage() {
   const refreshRegistries = async () => {
     try {
       console.log("🔄 Refreshing registries (silent)...");
+      console.log("🔍 Namespace type:", namespaceType);
       const API_BASE_URL =
         import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global";
       
+      // Use different API endpoints based on namespace type
+      let activeEndpoint: string;
+      let revokedEndpoint: string;
+      
+      if (namespaceType === 'delegated') {
+        // For delegated namespaces, use the profile-specific endpoint
+        activeEndpoint = `${API_BASE_URL}/dedi/${namespaceId}/get-registry-by-profile`;
+        revokedEndpoint = `${API_BASE_URL}/dedi/${namespaceId}/get-registry-by-profile?status=revoked`;
+      } else {
+        // For owned namespaces, use the regular query endpoint
+        activeEndpoint = `${API_BASE_URL}/dedi/query/${namespaceId}`;
+        revokedEndpoint = `${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`;
+      }
+      
+      console.log("🌐 Silent refresh active endpoint:", activeEndpoint);
+      console.log("🌐 Silent refresh revoked endpoint:", revokedEndpoint);
+      
       // Fetch both active and revoked registries to ensure we get all registries
       const [activeResponse, revokedResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}`, {
+        fetch(activeEndpoint, {
           method: "GET",
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },
         }),
-        fetch(`${API_BASE_URL}/dedi/query/${namespaceId}?status=revoked`, {
+        fetch(revokedEndpoint, {
           method: "GET",
           credentials: "include",
           headers: {
@@ -872,18 +940,51 @@ export function NamespaceDetailsPage() {
       let namespaceName = "Loading...";
       let totalRegistriesCount = 0;
 
+      // Handle active registries response
       if (activeResult.message === "Resource retrieved successfully") {
-        allRegistries = [...allRegistries, ...activeResult.data.registries];
-        namespaceName = activeResult.data.namespace_name;
-        totalRegistriesCount += activeResult.data.total_registries;
+        // Owned namespace response structure
+        if (activeResult.data && activeResult.data.registries) {
+          allRegistries = [...allRegistries, ...activeResult.data.registries];
+          namespaceName = activeResult.data.namespace_name || namespaceName;
+          totalRegistriesCount += activeResult.data.total_registries || 0;
+        }
+      } else if (activeResult.message === "User registries retrieved successfully") {
+        // Delegated namespace response structure
+        if (Array.isArray(activeResult.data)) {
+          allRegistries = [...allRegistries, ...activeResult.data];
+          // For delegated namespaces, extract namespace name from the first registry or use namespaceId as fallback
+          if (activeResult.data.length > 0 && activeResult.data[0].namespace_name) {
+            namespaceName = activeResult.data[0].namespace_name;
+          } else if (namespaceId) {
+            namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
+          }
+          totalRegistriesCount += activeResult.data.length;
+        }
       }
 
+      // Handle revoked registries response
       if (revokedResult.message === "Resource retrieved successfully") {
-        allRegistries = [...allRegistries, ...revokedResult.data.registries];
-        if (namespaceName === "Loading...") {
-          namespaceName = revokedResult.data.namespace_name;
+        // Owned namespace response structure
+        if (revokedResult.data && revokedResult.data.registries) {
+          allRegistries = [...allRegistries, ...revokedResult.data.registries];
+          // Only update namespace name if we haven't set it yet
+          if (namespaceName === "Loading...") {
+            namespaceName = revokedResult.data.namespace_name || namespaceName;
+          }
+          totalRegistriesCount += revokedResult.data.total_registries || 0;
         }
-        totalRegistriesCount += revokedResult.data.total_registries;
+      } else if (revokedResult.message === "User registries retrieved successfully") {
+        // Delegated namespace response structure
+        if (Array.isArray(revokedResult.data)) {
+          allRegistries = [...allRegistries, ...revokedResult.data];
+          // Only update namespace name if we haven't set it yet and data is available
+          if (namespaceName === "Loading..." && revokedResult.data.length > 0 && revokedResult.data[0].namespace_name) {
+            namespaceName = revokedResult.data[0].namespace_name;
+          } else if (namespaceName === "Loading..." && namespaceId) {
+            namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
+          }
+          totalRegistriesCount += revokedResult.data.length;
+        }
       }
 
       if (allRegistries.length > 0) {
@@ -921,16 +1022,12 @@ export function NamespaceDetailsPage() {
         setActiveRegistries(activeRegs);
         setRevokedRegistries(revokedRegs);
         setNamespaceName(namespaceName);
-        setTotalRegistries(totalRegistriesCount);
         console.log(
           "✅ Registries silently refreshed:",
           uniqueRegistries.length,
           "registries",
           `(${activeRegs.length} active, ${revokedRegs.length} revoked)`
         );
-
-        // Also refresh revoked registries count
-        await fetchRevokedRegistriesCount();
 
         return true;
       } else {
@@ -939,7 +1036,6 @@ export function NamespaceDetailsPage() {
         setActiveRegistries([]);
         setRevokedRegistries([]);
         setNamespaceName(namespaceName);
-        setTotalRegistries(0);
         return true;
       }
     } catch (error) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth-context";
 
 export function AuthVerifyPage() {
   const [searchParams] = useSearchParams();
+  const { token } = useParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     "loading"
@@ -24,6 +25,16 @@ export function AuthVerifyPage() {
     const error = searchParams.get("error");
     const verified = searchParams.get("verified");
 
+    // Handle magic link token verification
+    if (token) {
+      console.log("🔍 AuthVerify - Magic link token detected, redirecting to backend for verification...");
+      // Redirect to backend verify-email endpoint with token as query parameter
+      const backendUrl = `${import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global"}/dedi/verify-email?token=${token}`;
+      window.location.href = backendUrl;
+      return;
+    }
+
+    // Handle query parameter verification (existing logic)
     if (error) {
       setStatus("error");
       switch (error) {
@@ -50,7 +61,7 @@ export function AuthVerifyPage() {
       // If no params, this might be a direct verification success
       setStatus("success");
     }
-  }, [searchParams]);
+  }, [searchParams, token]);
 
   // Separate effect to handle redirect when user is authenticated
   useEffect(() => {
@@ -66,9 +77,9 @@ export function AuthVerifyPage() {
     if (status === "success") {
       // For successful verification, always check auth status directly via API
       // This ensures we get the most up-to-date authentication state
-      const checkAuthAndRedirect = async () => {
+      const checkAuthAndRedirect = async (retryCount = 0) => {
         try {
-          console.log("🔍 AuthVerify - Checking auth status via API...");
+          console.log(`🔍 AuthVerify - Checking auth status via API (attempt ${retryCount + 1})...`);
           const response = await fetch(
             `${
               import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global"
@@ -89,27 +100,47 @@ export function AuthVerifyPage() {
             // Give a short delay for user to see the success message
             setTimeout(() => {
               navigate("/dashboard");
-            }, 1500);
+            }, 1000);
           } else {
             console.log(
-              "❌ AuthVerify - User is not authenticated, redirecting to home"
+              `❌ AuthVerify - User is not authenticated (attempt ${retryCount + 1})`
             );
+            
+            // Retry up to 3 times with increasing delays
+            if (retryCount < 2) {
+              console.log(`🔄 AuthVerify - Retrying in ${(retryCount + 1) * 2} seconds...`);
+              setTimeout(() => {
+                checkAuthAndRedirect(retryCount + 1);
+              }, (retryCount + 1) * 2000);
+            } else {
+              console.log("❌ AuthVerify - Max retries reached, redirecting to home");
+              setTimeout(() => {
+                navigate("/");
+              }, 2000);
+            }
+          }
+        } catch (error) {
+          console.log(`❌ AuthVerify - Error checking auth status (attempt ${retryCount + 1}):`, error);
+          
+          // Retry up to 3 times with increasing delays
+          if (retryCount < 2) {
+            console.log(`🔄 AuthVerify - Retrying in ${(retryCount + 1) * 2} seconds...`);
+            setTimeout(() => {
+              checkAuthAndRedirect(retryCount + 1);
+            }, (retryCount + 1) * 2000);
+          } else {
+            console.log("❌ AuthVerify - Max retries reached, redirecting to home");
             setTimeout(() => {
               navigate("/");
             }, 2000);
           }
-        } catch (error) {
-          console.log("❌ AuthVerify - Error checking auth status:", error);
-          setTimeout(() => {
-            navigate("/");
-          }, 2000);
         }
       };
 
-      // Wait a moment for the cookie to be properly set, then check auth
-      setTimeout(checkAuthAndRedirect, 1000);
+      // Wait longer for the cookie to be properly set, then check auth
+      setTimeout(checkAuthAndRedirect, 2000);
     }
-  }, [status, navigate]);
+  }, [status, navigate, isLoading, isAuthenticated]);
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">

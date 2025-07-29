@@ -94,7 +94,7 @@ export function ActiveRegistriesPage() {
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [isSearching, setIsSearching] = useState(false);
+
 
   // Search function for filtering registries
   const handleSearch = useCallback((query: string) => {

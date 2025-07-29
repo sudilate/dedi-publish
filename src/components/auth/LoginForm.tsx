@@ -17,45 +17,40 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 
-const registrationSchema = z.object({
+const loginSchema = z.object({
   email: z.string().min(1, {
     message: 'Email is required.',
   }).email({
     message: 'Please enter a valid email address.',
   }),
-  name: z.string()
-    .min(3, { message: 'Invalid input: name must be between 3 and 50 characters long' })
-    .max(50, { message: 'Invalid input: name must be between 3 and 50 characters long' })
-    .regex(/^[a-zA-Z0-9_ ]+$/, { message: 'Invalid input: name should not contain special characters' }),
 });
 
-type RegistrationFormValues = z.infer<typeof registrationSchema>;
+type LoginFormValues = z.infer<typeof loginSchema>;
 
-export function SignupForm() {
+export function LoginForm() {
   const { toast } = useToast();
-  const { register } = useAuth();
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const form = useForm<RegistrationFormValues>({
-    resolver: zodResolver(registrationSchema),
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
     defaultValues: {
       email: '',
-      name: '',
     },
   });
 
-  async function onSubmit(data: RegistrationFormValues) {
+  async function onSubmit(data: LoginFormValues) {
     setLoading(true);
     
     // Show loading toast
     const loadingToast = toast({
-      title: '⏳ Registering...',
-      description: 'Please wait while we process your registration.',
+      title: '⏳ Logging in...',
+      description: 'Please wait while we process your login.',
       duration: Infinity, // Keep it until we dismiss it
     });
     
     try {
-      const success = await register(data.email, data.name);
+      const success = await login(data.email);
       
       if (success) {
         // Dismiss loading toast
@@ -63,7 +58,7 @@ export function SignupForm() {
         
         // Show success toast
         toast({
-          title: '🎉 Registration successful!',
+          title: '🎉 Login successful!',
           description: 'A verification email has been sent to your email address',
           className: 'border-green-200 bg-green-50 text-green-900',
           duration: 5000,
@@ -76,7 +71,7 @@ export function SignupForm() {
         loadingToast.dismiss();
         
         toast({
-          title: '❌ Registration failed',
+          title: '❌ Login failed',
           description: 'Something went wrong. Please try again.',
           variant: 'destructive',
         });
@@ -88,7 +83,7 @@ export function SignupForm() {
       // Show the API error message to the user
       const errorMessage = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
       toast({
-        title: '❌ Registration failed',
+        title: '❌ Login failed',
         description: errorMessage,
         variant: 'destructive',
       });
@@ -100,23 +95,6 @@ export function SignupForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input
-                  type="text"
-                  placeholder="Enter your full name"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
         <FormField
           control={form.control}
           name="email"
@@ -139,10 +117,10 @@ export function SignupForm() {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Registering...
+                Logging in...
               </>
             ) : (
-              'Register'
+              'Login'
             )}
           </Button>
         </div>

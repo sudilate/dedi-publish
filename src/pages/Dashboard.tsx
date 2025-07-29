@@ -294,7 +294,7 @@ export function DashboardPage() {
         }
       );
 
-      const result = await response.json();
+      const result = await response.json() as any;
 
       if (response.ok) {
         setCreateModalGeneratedTxt(result.txt);
@@ -344,7 +344,7 @@ export function DashboardPage() {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as any;
 
       if (response.ok) {
         toast({
@@ -560,7 +560,7 @@ export function DashboardPage() {
         }
       );
 
-      const result = await response.json();
+      const result = await response.json() as any;
 
       if (response.ok) {
         setGeneratedTxt(result.txt);
@@ -626,7 +626,7 @@ export function DashboardPage() {
         }),
       });
 
-      const result = await response.json();
+      const result = await response.json() as unknown;
 
       if (response.ok) {
         // Update the namespace as verified in the UI
@@ -728,8 +728,8 @@ export function DashboardPage() {
     setIsUpdateModalOpen(true);
   };
 
-  const handleNamespaceClick = (namespaceId: string) => {
-    navigate(`/namespaces/${namespaceId}`);
+  const handleNamespaceClick = (namespaceId: string, isOwned: boolean = true) => {
+    navigate(`/namespaces/${namespaceId}?type=${isOwned ? 'owned' : 'delegated'}`);
   };
 
   const handleMetaChange = (key: string, value: unknown) => {
@@ -793,7 +793,7 @@ export function DashboardPage() {
                   <Card
                     key={namespace.namespace_id}
                     className="hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => handleNamespaceClick(namespace.namespace_id)}
+                    onClick={() => handleNamespaceClick(namespace.namespace_id, true)}
                   >
                     <CardHeader className="flex flex-row items-center justify-between">
                       <div>
@@ -906,7 +906,7 @@ export function DashboardPage() {
             <Card
               key={namespace.namespace_id}
               className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleNamespaceClick(namespace.namespace_id)}
+              onClick={() => handleNamespaceClick(namespace.namespace_id, false)}
             >
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>

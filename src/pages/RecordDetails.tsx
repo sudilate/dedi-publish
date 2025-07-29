@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MoreVertical, AlertCircle, RotateCcw, CheckCircle, Info, Copy } from 'lucide-react';
+import { ArrowLeft, MoreVertical, AlertCircle, CheckCircle, Info, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -68,7 +68,7 @@ interface RecordDetailsApiResponse {
     namespace_id: string;
     registry_id: string;
     registry_name: string;
-    record_id: string;
+    record_id: string | null;
     record_name: string;
     description: string;
     digest: string;
@@ -76,13 +76,13 @@ interface RecordDetailsApiResponse {
     version_count: number;
     version: string;
     details: { [key: string]: string };
-    meta: any;
+    meta: unknown;
+    genesis: string;
     created_at: string;
-    last_updated_at: string;
+    updated_at: string;
     created_by: string;
-    is_revoked: boolean | null;
-    is_archived: boolean | null;
-    ttl: string;
+    state: string;
+    ttl: number;
   };
 }
 
@@ -147,14 +147,14 @@ export function RecordDetailsPage() {
   const [recordDetails, setRecordDetails] = useState<RecordDetailsApiResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [recordLoading, setRecordLoading] = useState(true);
-  const [isArchiveAlertOpen, setIsArchiveAlertOpen] = useState(false);
+  const [isPublishAlertOpen, setIsPublishAlertOpen] = useState(false);
+  const [isSuspendAlertOpen, setIsSuspendAlertOpen] = useState(false);
   const [isRevokeAlertOpen, setIsRevokeAlertOpen] = useState(false);
-  const [isRestoreAlertOpen, setIsRestoreAlertOpen] = useState(false);
   const [isReinstateAlertOpen, setIsReinstateAlertOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [suspendLoading, setSuspendLoading] = useState(false);
   const [revokeLoading, setRevokeLoading] = useState(false);
-  const [restoreLoading, setRestoreLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateFormData, setUpdateFormData] = useState<UpdateRecordFormData>({
@@ -164,14 +164,10 @@ export function RecordDetailsPage() {
     meta: {},
   });
 
-  useEffect(() => {
-    if (namespaceId && registryName && recordName) {
-      fetchRecordDetails();
-    }
-  }, [namespaceId, registryName, recordName]);
-
-  const fetchRecordDetails = async () => {
+  const fetchRecordDetails = useCallback(async () => {
     try {
+      console.log('🔄 Fetching record details...');
+      console.log('📍 Parameters:', { namespaceId, registryName, recordName });
       setRecordLoading(true);
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
       // Properly encode URL parameters
@@ -179,7 +175,10 @@ export function RecordDetailsPage() {
       const encodedRegistry = registryName || '';
       const encodedRecord = recordName || '';
       
-      const response = await fetch(`${API_BASE_URL}/dedi/lookup/${encodedNamespace}/${encodedRegistry}/${encodedRecord}`, {
+      const apiUrl = `${API_BASE_URL}/dedi/lookup/${encodedNamespace}/${encodedRegistry}/${encodedRecord}`;
+      console.log('🌐 API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -218,7 +217,13 @@ export function RecordDetailsPage() {
       setRecordLoading(false);
       setLoading(false);
     }
-  };
+  }, [namespaceId, registryName, recordName, toast]);
+
+  useEffect(() => {
+    if (namespaceId && registryName && recordName) {
+      fetchRecordDetails();
+    }
+  }, [namespaceId, registryName, recordName, fetchRecordDetails]);
 
   const handleOpenUpdateModal = () => {
     if (!recordDetails) return;
@@ -262,19 +267,19 @@ export function RecordDetailsPage() {
             switch (type.toLowerCase()) {
               case 'integer':
               case 'int':
-                const intValue = parseInt(value, 10);
+                { const intValue = parseInt(value, 10);
                 if (!isNaN(intValue)) {
                   typedDetails[field] = intValue;
                 }
-                break;
+                break; }
               case 'float':
               case 'double':
               case 'number':
-                const floatValue = parseFloat(value);
+                { const floatValue = parseFloat(value);
                 if (!isNaN(floatValue)) {
                   typedDetails[field] = floatValue;
                 }
-                break;
+                break; }
               case 'boolean':
               case 'bool':
                 typedDetails[field] = value === 'true' || value === '1';
@@ -363,27 +368,22 @@ export function RecordDetailsPage() {
     }));
   };
 
-  const handleOpenArchiveAlert = () => {
-    setIsArchiveAlertOpen(true);
+  const handleOpenPublishAlert = () => {
+    setIsPublishAlertOpen(true);
   };
 
-  const handleArchiveRecord = async () => {
-    if (archiveLoading) return; // Prevent multiple submissions
+  const handlePublishRecord = async () => {
+    if (publishLoading) return; // Prevent multiple submissions
     
     try {
-      setArchiveLoading(true);
+      setPublishLoading(true);
       
-      // Cookie authentication is handled automatically by credentials: 'include'
-
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      // Properly encode URL parameters
       const currentNamespaceId = namespaceId || '';
       const currentRegistryName = registryName || '';
       const currentRecordName = recordName || '';
       
-      console.log('Archive API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/archive-record`);
-      
-      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/archive-record`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/publish-record`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -393,32 +393,84 @@ export function RecordDetailsPage() {
       });
 
       const result = await response.json();
-      console.log('Archive API response:', result);
+      console.log('Publish API response:', result);
 
-      if (response.ok && result.message === "Record has been archived") {
+      if (response.ok && result.message === "Record published") {
         toast({
           title: 'Success',
-          description: 'Record archived successfully',
+          description: 'Record published successfully',
         });
-        setIsArchiveAlertOpen(false);
-        // Refresh record details to show updated status
+        setIsPublishAlertOpen(false);
         await fetchRecordDetails();
       } else {
         toast({
           title: 'Error',
-          description: result.message || 'Failed to archive record',
+          description: result.message || 'Failed to publish record',
           variant: 'destructive',
         });
       }
     } catch (error) {
-      console.error('Error archiving record:', error);
+      console.error('Error publishing record:', error);
       toast({
         title: 'Error',
-        description: 'Failed to archive record. Please try again.',
+        description: 'Failed to publish record. Please try again.',
         variant: 'destructive',
       });
     } finally {
-      setArchiveLoading(false);
+      setPublishLoading(false);
+    }
+  };
+
+  const handleOpenSuspendAlert = () => {
+    setIsSuspendAlertOpen(true);
+  };
+
+  const handleSuspendRecord = async () => {
+    if (suspendLoading) return; // Prevent multiple submissions
+    
+    try {
+      setSuspendLoading(true);
+      
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
+      const currentNamespaceId = namespaceId || '';
+      const currentRegistryName = registryName || '';
+      const currentRecordName = recordName || '';
+      
+      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/suspend-record`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const result = await response.json();
+      console.log('Suspend API response:', result);
+
+      if (response.ok && result.message === "Record has been suspended") {
+        toast({
+          title: 'Success',
+          description: 'Record suspended successfully',
+        });
+        setIsSuspendAlertOpen(false);
+        await fetchRecordDetails();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to suspend record',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error suspending record:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to suspend record. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSuspendLoading(false);
     }
   };
 
@@ -454,7 +506,7 @@ export function RecordDetailsPage() {
       const result = await response.json();
       console.log('Revoke API response:', result);
 
-      if (response.ok && result.message === "Record has been revoked") {
+      if (response.ok && result.message === "Record has been archived") {
         toast({
           title: 'Success',
           description: 'Record revoked successfully',
@@ -481,64 +533,7 @@ export function RecordDetailsPage() {
     }
   };
 
-  const handleOpenRestoreAlert = () => {
-    setIsRestoreAlertOpen(true);
-  };
 
-  const handleRestoreRecord = async () => {
-    if (restoreLoading) return; // Prevent multiple submissions
-    
-    try {
-      setRestoreLoading(true);
-      
-      // Cookie authentication is handled automatically by credentials: 'include'
-
-      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      // Properly encode URL parameters
-      const currentNamespaceId = namespaceId || '';
-      const currentRegistryName = registryName || '';
-      const currentRecordName = recordName || '';
-      
-      console.log('Restore API URL:', `${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/restore-record`);
-      
-      const response = await fetch(`${API_BASE_URL}/dedi/${currentNamespaceId}/${currentRegistryName}/${currentRecordName}/restore-record`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      const result = await response.json();
-      console.log('Restore API response:', result);
-
-      if (response.ok && (result.message === "Record restored successfully" || result.message === "Record has been restored")) {
-        toast({
-          title: 'Success',
-          description: 'Record restored successfully',
-        });
-        setIsRestoreAlertOpen(false);
-        // Refresh record details to show updated status
-        await fetchRecordDetails();
-      } else {
-        toast({
-          title: 'Error',
-          description: result.message || 'Failed to restore record',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      console.error('Error restoring record:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to restore record. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setRestoreLoading(false);
-    }
-  };
 
   const handleOpenReinstateAlert = () => {
     setIsReinstateAlertOpen(true);
@@ -602,17 +597,112 @@ export function RecordDetailsPage() {
   const getStatusDisplay = () => {
     if (!recordDetails) return 'Unknown';
     
-    if (recordDetails.is_revoked) return 'Revoked';
-    if (recordDetails.is_archived) return 'Archived';
-    return 'Active';
+    // Use the state field from the API response
+    switch (recordDetails.state) {
+      case 'draft':
+        return 'Draft';
+      case 'live':
+        return 'Live';
+      case 'suspended':
+        return 'Suspended';
+      case 'revoked':
+        return 'Revoked';
+      case 'expired':
+        return 'Expired';
+      default:
+        return recordDetails.state || 'Unknown';
+    }
   };
 
   const getStatusColor = () => {
     if (!recordDetails) return 'text-gray-500';
     
-    if (recordDetails.is_revoked) return 'text-red-600';
-    if (recordDetails.is_archived) return 'text-yellow-600';
-    return 'text-green-600';
+    switch (recordDetails.state) {
+      case 'draft':
+        return 'text-yellow-600';
+      case 'live':
+        return 'text-green-600';
+      case 'suspended':
+        return 'text-orange-600';
+      case 'revoked':
+        return 'text-red-600';
+      case 'expired':
+        return 'text-gray-600';
+      default:
+        return 'text-gray-500';
+    }
+  };
+
+  // Function to render dropdown menu items based on record state
+  const renderDropdownMenuItems = () => {
+    if (!recordDetails) return null;
+
+    const state = recordDetails.state;
+    
+    // If expired, show no action buttons
+    if (state === 'expired') {
+      return null;
+    }
+
+    const items = [];
+
+    // Always show Update button (except for expired)
+    items.push(
+      <DropdownMenuItem key="update" onClick={handleOpenUpdateModal}>
+        Update
+      </DropdownMenuItem>
+    );
+
+    items.push(<DropdownMenuSeparator key="separator" />);
+
+    // State-specific buttons
+    if (state === 'draft') {
+      // Draft state: show Publish button
+      items.push(
+        <DropdownMenuItem 
+          key="publish" 
+          onClick={handleOpenPublishAlert} 
+          className="text-green-600 focus:text-green-600 focus:bg-green-50"
+        >
+          Publish
+        </DropdownMenuItem>
+      );
+    } else if (state === 'live') {
+      // Live state: show Suspend and Revoke buttons
+      items.push(
+        <DropdownMenuItem 
+          key="suspend" 
+          onClick={handleOpenSuspendAlert} 
+          className="text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+        >
+          Suspend
+        </DropdownMenuItem>
+      );
+      items.push(
+        <DropdownMenuItem 
+          key="revoke" 
+          onClick={handleOpenRevokeAlert} 
+          className="text-red-600 focus:text-red-600 focus:bg-red-50"
+        >
+          Revoke
+        </DropdownMenuItem>
+      );
+    } else if (state === 'suspended') {
+      // Suspended state: show Reinstate button
+      items.push(
+        <DropdownMenuItem 
+          key="reinstate" 
+          onClick={handleOpenReinstateAlert} 
+          className="text-blue-600 focus:text-blue-600 focus:bg-blue-50"
+        >
+          <CheckCircle className="mr-2 h-4 w-4" />
+          Reinstate
+        </DropdownMenuItem>
+      );
+    }
+    // Note: revoked state shows no additional buttons (revoke is permanent)
+
+    return items;
   };
 
   const formatDate = (dateString: string) => {
@@ -710,39 +800,18 @@ export function RecordDetailsPage() {
               <CardTitle className="text-2xl">{recordDetails.record_name}</CardTitle>
               <CardDescription>{recordDetails.description}</CardDescription>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleOpenUpdateModal}>
-                  Update
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {recordDetails.is_archived ? (
-                  <DropdownMenuItem onClick={handleOpenRestoreAlert} className="text-green-600 focus:text-green-600 focus:bg-green-50">
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Restore
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onClick={handleOpenArchiveAlert} className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50">
-                    Archive
-                  </DropdownMenuItem>
-                )}
-                {recordDetails.is_revoked ? (
-                  <DropdownMenuItem onClick={handleOpenReinstateAlert} className="text-blue-600 focus:text-blue-600 focus:bg-blue-50">
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Reinstate
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onClick={handleOpenRevokeAlert} className="text-red-600 focus:text-red-600 focus:bg-red-50">
-                    Revoke
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {recordDetails.state !== 'expired' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {renderDropdownMenuItems()}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -771,7 +840,7 @@ export function RecordDetailsPage() {
                 </div>
                 <div>
                   <h3 className="font-medium text-sm text-muted-foreground">Last Updated</h3>
-                  <p className="text-sm">{formatDate(recordDetails.last_updated_at)}</p>
+                  <p className="text-sm">{formatDate(recordDetails.updated_at)}</p>
                 </div>
                 <div>
                   <h3 className="font-medium text-sm text-muted-foreground">Created By</h3>
@@ -1066,29 +1135,58 @@ export function RecordDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Archive Alert Dialog */}
-      <AlertDialog open={isArchiveAlertOpen} onOpenChange={setIsArchiveAlertOpen}>
+      {/* Publish Alert Dialog */}
+      <AlertDialog open={isPublishAlertOpen} onOpenChange={setIsPublishAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to archive this record?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure you want to publish this record?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action will archive the record "{recordDetails.record_name}". You may be able to unarchive it later, but it will be hidden from normal view.
+              This action will publish the record "{recordDetails.record_name}" and make it live.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={archiveLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={publishLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleArchiveRecord} 
-              className="bg-yellow-600 hover:bg-yellow-700"
-              disabled={archiveLoading}
+              onClick={handlePublishRecord} 
+              className="bg-green-600 hover:bg-green-700"
+              disabled={publishLoading}
             >
-              {archiveLoading ? (
+              {publishLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Archiving...
+                  Publishing...
                 </>
               ) : (
-                'Archive'
+                'Publish'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Suspend Alert Dialog */}
+      <AlertDialog open={isSuspendAlertOpen} onOpenChange={setIsSuspendAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to suspend this record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will suspend the record "{recordDetails.record_name}". You can reinstate it later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={suspendLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleSuspendRecord} 
+              className="bg-orange-600 hover:bg-orange-700"
+              disabled={suspendLoading}
+            >
+              {suspendLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Suspending...
+                </>
+              ) : (
+                'Suspend'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1124,36 +1222,7 @@ export function RecordDetailsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-             {/* Restore Alert Dialog */}
-       <AlertDialog open={isRestoreAlertOpen} onOpenChange={setIsRestoreAlertOpen}>
-         <AlertDialogContent>
-           <AlertDialogHeader>
-             <AlertDialogTitle>Are you sure you want to restore this record?</AlertDialogTitle>
-             <AlertDialogDescription>
-               This action will restore the record "{recordDetails.record_name}" from archived status, making it active again.
-             </AlertDialogDescription>
-           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={restoreLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleRestoreRecord} 
-              className="bg-green-600 hover:bg-green-700"
-              disabled={restoreLoading}
-            >
-              {restoreLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Restoring...
-                </>
-              ) : (
-                'Restore'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-             {/* Reinstate Alert Dialog */}
+      {/* Reinstate Alert Dialog */}
        <AlertDialog open={isReinstateAlertOpen} onOpenChange={setIsReinstateAlertOpen}>
          <AlertDialogContent>
            <AlertDialogHeader>

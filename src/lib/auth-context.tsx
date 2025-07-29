@@ -8,21 +8,21 @@ import {
 import {
   registerUser,
   logoutUser,
-  checkAuthStatus,
-  getCurrentUser,
 } from "./api";
 
 interface User {
   id?: string;
   email: string;
   email_verified?: boolean;
+  name?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  register: (email: string) => Promise<boolean>;
+  register: (email: string, name: string) => Promise<boolean>;
+  login: (email: string) => Promise<boolean>;
   logout: () => void;
   getAuthTokens: () => {
     accessToken: string | null;
@@ -43,13 +43,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAuth = async () => {
       try {
         console.log("🔍 Checking authentication status via API...");
-        const userData = await getCurrentUser();
-        console.log("✅ User data received:", userData);
-        setUser({
-          id: userData.id,
-          email: userData.email,
-          email_verified: userData.email_verified || true,
-        });
+        const response = await fetch(
+          `${import.meta.env.VITE_ENDPOINT || "https://dev.dedi.global"}/dedi/auth/me`,
+          {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.ok) {
+          const userData = await response.json() as any;
+          console.log("✅ User data received:", userData);
+          setUser({
+            id: userData.id,
+            email: userData.email,
+            email_verified: userData.email_verified || true,
+            name: userData.name,
+          });
+        } else {
+          console.log("❌ No active session found - response not ok");
+        }
       } catch (error) {
         console.log("❌ No active session found:", error);
       } finally {
@@ -61,17 +77,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Registration function using simplified API
-  const register = async (email: string): Promise<boolean> => {
+  const register = async (email: string, name: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      await registerUser(email);
+      await registerUser(email, name);
 
       // If registerUser doesn't throw an error, the registration was successful
       // (registerUser already handles HTTP status codes including 201)
       return true;
-    } catch (error) {
-      // Re-throw the error so it can be handled by the UI
-      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Login function using the same API as register (email only)
+  const login = async (email: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      await registerUser(email, ""); // Use empty string for name since login doesn't need it
+
+      // If registerUser doesn't throw an error, the login was successful
+      return true;
     } finally {
       setIsLoading(false);
     }
@@ -106,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isLoading,
         register,
+        login,
         logout,
         getAuthTokens,
       }}

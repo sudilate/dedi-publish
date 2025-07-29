@@ -63,15 +63,16 @@ export interface ApiResponse<T> {
   data: T;
 }
 
-// Registration API call - simplified to only accept email
+// Registration API call - accepts email and name
 export async function registerUser(
-  email: string
+  email: string,
+  name: string
 ): Promise<ApiResponse<string>> {
   try {
     const response = await fetch(`${API_BASE_URL}/dedi/register`, {
       method: "POST",
       ...defaultFetchOptions,
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, name }),
     });
 
     const result = await response.json();
@@ -102,24 +103,35 @@ export async function registerUser(
 
 
 // Get namespaces by profile (using cookie authentication)
-export async function getNamespacesByProfile(): Promise<any> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/dedi/get-namespace-by-profile`,
-      {
-        method: "GET",
-        ...defaultFetchOptions,
-      }
-    );
-
-    if (response.ok) {
-      return await response.json();
-    } else {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Failed to fetch namespaces");
+export async function getNamespacesByProfile(): Promise<unknown> {
+  const response = await fetch(
+    `${API_BASE_URL}/dedi/get-namespace-by-profile`,
+    {
+      method: "GET",
+      ...defaultFetchOptions,
     }
-  } catch (error) {
-    throw error;
+  );
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch namespaces");
+  }
+}
+
+// Get namespace versions (using cookie authentication)
+export async function getNamespaceVersions(namespace: string): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/dedi/versions/${namespace}`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch namespace versions");
   }
 }
 
@@ -127,29 +139,22 @@ export async function getNamespacesByProfile(): Promise<any> {
 export async function createNamespace(namespaceData: {
   name: string;
   description: string;
-  meta: any;
+  meta: unknown;
 }): Promise<unknown> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/dedi/create-namespace`, {
-      method: "POST",
-      ...defaultFetchOptions,
-      body: JSON.stringify(namespaceData),
-    });
+  const response = await fetch(`${API_BASE_URL}/dedi/create-namespace`, {
+    method: "POST",
+    ...defaultFetchOptions,
+    body: JSON.stringify(namespaceData),
+  });
 
-    const result = await response.json();
+  const result = await response.json();
 
-    if (response.ok) {
-      return result;
-    } else {
-      const errorMessage =
-        result.message || result.error || "Failed to create namespace";
-      throw new Error(errorMessage);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error("Network error occurred while creating namespace");
+  if (response.ok) {
+    return result;
+  } else {
+    const errorMessage =
+      result.message || result.error || "Failed to create namespace";
+    throw new Error(errorMessage);
   }
 }
 
@@ -162,30 +167,23 @@ export async function updateNamespace(
     meta: unknown;
   }
 ): Promise<unknown> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/dedi/${namespaceId}/update-namespace`,
-      {
-        method: "POST",
-        ...defaultFetchOptions,
-        body: JSON.stringify(namespaceData),
-      }
-    );
-
-    const result = await response.json();
-
-    if (response.ok) {
-      return result;
-    } else {
-      const errorMessage =
-        result.message || result.error || "Failed to update namespace";
-      throw new Error(errorMessage);
+  const response = await fetch(
+    `${API_BASE_URL}/dedi/${namespaceId}/update-namespace`,
+    {
+      method: "POST",
+      ...defaultFetchOptions,
+      body: JSON.stringify(namespaceData),
     }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error("Network error occurred while updating namespace");
+  );
+
+  const result = await response.json();
+
+  if (response.ok) {
+    return result;
+  } else {
+    const errorMessage =
+      result.message || result.error || "Failed to update namespace";
+    throw new Error(errorMessage);
   }
 }
 
@@ -200,7 +198,7 @@ export async function checkAuthStatus(): Promise<boolean> {
 
     // If the request succeeds, user is authenticated
     return response.ok;
-  } catch (error) {
+  } catch {
     // If request fails, user is not authenticated
     return false;
   }
@@ -208,19 +206,15 @@ export async function checkAuthStatus(): Promise<boolean> {
 
 // Get current user info using the auth/me endpoint
 export async function getCurrentUser(): Promise<unknown> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/dedi/auth/me`, {
-      method: "GET",
-      ...defaultFetchOptions,
-    });
+  const response = await fetch(`${API_BASE_URL}/dedi/auth/me`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
 
-    if (response.ok) {
-      return await response.json();
-    } else {
-      throw new Error("Not authenticated");
-    }
-  } catch (error) {
-    throw error;
+  if (response.ok) {
+    return await response.json();
+  } else {
+    throw new Error("Not authenticated");
   }
 }
 
@@ -234,5 +228,80 @@ export async function logoutUser(): Promise<void> {
   } catch (error) {
     // Even if logout fails on server, we'll clear client state
     console.error("Logout error:", error);
+  }
+}
+
+// Registry lookup (using cookie authentication)
+export async function getRegistryLookup(namespace: string, registryName: string): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/dedi/lookup/${namespace}/${registryName}`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch registry details");
+  }
+}
+
+// Get registry versions (using cookie authentication)
+export async function getRegistryVersions(namespace: string, registryName: string): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/dedi/versions/${namespace}/${registryName}`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch registry versions");
+  }
+}
+
+// Get registries by profile (using cookie authentication)
+export async function getRegistriesByProfile(namespace: string): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/dedi/${namespace}/get-registry-by-profile`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch registries by profile");
+  }
+}
+
+// Get record versions (using cookie authentication)
+export async function getRecordVersions(namespace: string, registryName: string, recordName: string): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/dedi/versions/${namespace}/${registryName}/${recordName}`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to fetch record versions");
+  }
+}
+
+// Search records (using cookie authentication)
+export async function searchRecords(namespace: string, query: string): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/dedi/search/${namespace}?q=${encodeURIComponent(query)}`, {
+    method: "GET",
+    ...defaultFetchOptions,
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to search records");
   }
 }

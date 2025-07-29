@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Upload, MoreVertical, Eye, Info, ArrowLeft, Search, X } from 'lucide-react';
+import { Plus, MoreVertical, Eye, Info, ArrowLeft, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -62,9 +63,10 @@ interface RecordItem {
   created_by: string;
   version_count: number;
   version: string;
-  meta: any;
+  meta: unknown;
   is_revoked: boolean | null;
   is_archived: boolean | null;
+  state: string;
 }
 
 interface RecordsApiResponse {
@@ -74,7 +76,7 @@ interface RecordsApiResponse {
     namespace_name: string;
     registry_name: string;
     registry_id: string;
-    schema: { [key: string]: any };
+    schema: { [key: string]: any; properties?: { [key: string]: any } };
     created_by: string;
     created_at: string;
     updated_at: string;
@@ -88,8 +90,8 @@ interface AddRecordFormData {
   record_name: string;
   description: string;
   details: { [key: string]: string };
-  meta: { [key: string]: unknown };
-  arrayFields: { [key: string]: unknown[] }; // Add array fields support
+  meta: { [key: string]: any };
+  arrayFields: { [key: string]: any[] }; // Add array fields support
 }
 
 // Interface for add record API response
@@ -158,7 +160,7 @@ export function RecordsPage() {
   const { toast } = useToast();
   
   const [records, setRecords] = useState<RecordItem[]>([]);
-  const [schema, setSchema] = useState<{ [key: string]: unknown }>({});
+  const [schema, setSchema] = useState<{ [key: string]: any; properties?: { [key: string]: any } }>({});
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [registryDisplayName, setRegistryDisplayName] = useState<string>('Loading...');
   const [totalRecords, setTotalRecords] = useState<number>(0);
@@ -200,7 +202,7 @@ export function RecordsPage() {
   const [searchResults, setSearchResults] = useState<SearchRecord[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [allRecords, setAllRecords] = useState<RecordItem[]>([]);
+
 
   // Get all available search fields (record_name + schema fields)
   const getAvailableSearchFields = () => {
@@ -312,18 +314,12 @@ export function RecordsPage() {
     navigate(`/${namespaceId}/${registryName}/${record.record_name}`);
   };
 
-  useEffect(() => {
-    if (namespaceId && registryName) {
-      fetchRecords();
-    }
-  }, [namespaceId, registryName]);
-
-  const fetchRecords = async () => {
+  const fetchRecords = useCallback(async () => {
     try {
       console.log('🔄 Fetching records...');
       setLoading(true);
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      const response = await fetch(`${API_BASE_URL}/dedi/query/${namespaceId}/${registryName}`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/internal/${namespaceId}/${registryName}/query-records-by-profile`, {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -372,7 +368,13 @@ export function RecordsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [namespaceId, registryName, toast]);
+
+  useEffect(() => {
+    if (namespaceId && registryName) {
+      fetchRecords();
+    }
+  }, [namespaceId, registryName, fetchRecords]);
 
   const handleRowClick = (record: RecordItem) => {
     navigate(`/${namespaceId}/${registryName}/${record.record_name}`);
@@ -457,14 +459,15 @@ export function RecordsPage() {
       ...prev,
       arrayFields: {
         ...prev.arrayFields,
-        [fieldKey]: prev.arrayFields[fieldKey]?.map((item, i) => 
+        [fieldKey]: prev.arrayFields[fieldKey]?.map((item: unknown, i) => 
           i === index ? { ...item, [itemKey]: value } : item
         ) || []
       }
     }));
   };
 
-  const handleAddRecord = async () => {
+  // Save record as draft
+  const handleSaveAsDraft = async () => {
     if (addLoading) return; // Prevent multiple submissions
     
     try {
@@ -484,31 +487,6 @@ export function RecordsPage() {
         toast({
           title: 'Validation Error',
           description: 'Description is required',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Validate required schema fields based on schema type
-      const schemaType = getSchemaType();
-      const requiredFields = getRequiredFields(schemaType);
-      const currentMissingFields: string[] = [];
-
-      // Check each required field
-      requiredFields.forEach(fieldKey => {
-        const value = addFormData.details[fieldKey];
-        if (!value || !value.trim()) {
-          currentMissingFields.push(fieldKey);
-        }
-      });
-
-      // Update missing fields state for UI highlighting
-      setMissingFields(currentMissingFields);
-
-      if (currentMissingFields.length > 0) {
-        toast({
-          title: 'Validation Error',
-          description: `Please fill in the following required fields: ${currentMissingFields.join(', ')}`,
           variant: 'destructive',
         });
         return;
@@ -560,7 +538,7 @@ export function RecordsPage() {
           Object.values(item).some(val => val && String(val).trim() !== '')
         );
         if (validItems.length > 0) {
-          finalDetails[fieldKey] = validItems; // Send as actual array, not JSON string
+          finalDetails[fieldKey] = validItems;
         }
       });
 
@@ -570,33 +548,10 @@ export function RecordsPage() {
         parsedMeta = addFormData.meta;
       }
 
-      // Cookie authentication is handled automatically by credentials: 'include'
-      
-      // Debug: Check if cookies are available
-      console.log('🍪 Document cookies:', document.cookie);
-      console.log('🔐 Checking authentication state...');
-      
-      // Check if token cookie exists
-      const cookies = document.cookie.split(';');
-      const tokenCookie = cookies.find(cookie => cookie.trim().startsWith('token='));
-      console.log('🔍 Token cookie found:', !!tokenCookie);
-      
-      if (tokenCookie) {
-        try {
-          const tokenValue = tokenCookie.split('=')[1];
-          const parsedToken = JSON.parse(decodeURIComponent(tokenValue));
-          console.log('✅ Token parsed successfully:', !!parsedToken.access_token);
-        } catch (e) {
-          console.log('❌ Error parsing token:', e);
-        }
-      } else {
-        console.log('❌ No token cookie found - this is the authentication issue!');
-      }
-
       const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
-      console.log('🔄 Making API call to:', `${API_BASE_URL}/dedi/${namespaceId}/${registryName}/add-record`);
+      console.log('🔄 Saving record as draft:', `${API_BASE_URL}/dedi/${namespaceId}/${registryName}/save-record-as-draft`);
       
-      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${registryName}/add-record`, {
+      const response = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${registryName}/save-record-as-draft`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -610,14 +565,13 @@ export function RecordsPage() {
         }),
       });
 
-      const result: AddRecordApiResponse = await response.json();
-      console.log('📝 Add record API response:', result);
-      console.log('📝 Response status:', response.status);
+      const result = await response.json();
+      console.log('📝 Save as draft API response:', result);
 
-      if (response.ok && (result.message === "record created" || result.message === "Record created" || result.message === "Record created successfully")) {
+      if (response.ok) {
         toast({
           title: 'Success',
-          description: 'Record added successfully',
+          description: 'Record saved as draft successfully',
         });
         setIsAddModalOpen(false);
         setAddFormData({
@@ -631,24 +585,163 @@ export function RecordsPage() {
         // Refresh the records list
         await fetchRecords();
       } else {
-        console.error('❌ API Error:', result);
         toast({
           title: 'Error',
-          description: result.message || 'Failed to add record',
+          description: result.message || 'Failed to save record as draft',
           variant: 'destructive',
         });
       }
     } catch (error) {
-      console.error('Error adding record:', error);
+      console.error('Error saving record as draft:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add record. Please try again.',
+        description: 'Failed to save record as draft. Please try again.',
         variant: 'destructive',
       });
     } finally {
       setAddLoading(false);
     }
   };
+
+  // Publish record directly
+  const handlePublishRecord = async () => {
+    if (addLoading) return; // Prevent multiple submissions
+    
+    try {
+      setAddLoading(true);
+      
+      // Validate required fields
+      if (!addFormData.record_name.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Record name is required',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!addFormData.description.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Description is required',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Prepare details with proper type conversion
+      const finalDetails: { [key: string]: string | number | boolean | unknown[] } = {};
+      
+      // Convert form data to proper types based on schema
+      const schemaProps = schema.properties || schema;
+      Object.keys(schemaProps).forEach(field => {
+        const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
+        const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+        const value = addFormData.details[field];
+        
+        if (value !== undefined && value !== '') {
+          switch (fieldType) {
+            case 'integer':
+            case 'int':
+              const intValue = parseInt(value, 10);
+              if (!isNaN(intValue)) {
+                finalDetails[field] = intValue;
+              }
+              break;
+            case 'number':
+            case 'float':
+            case 'double':
+              { const floatValue = parseFloat(value);
+              if (!isNaN(floatValue)) {
+                finalDetails[field] = floatValue;
+              }
+              break; }
+            case 'boolean':
+            case 'bool':
+              finalDetails[field] = value === 'true' || value === '1';
+              break;
+            case 'string':
+            default:
+              finalDetails[field] = value;
+              break;
+          }
+        }
+      });
+      
+      // Process array fields
+      Object.keys(addFormData.arrayFields).forEach(fieldKey => {
+        const arrayItems = addFormData.arrayFields[fieldKey] || [];
+        const validItems = arrayItems.filter(item => 
+          Object.values(item).some(val => val && String(val).trim() !== '')
+        );
+        if (validItems.length > 0) {
+          finalDetails[fieldKey] = validItems;
+        }
+      });
+
+      // Prepare metadata (optional)
+      let parsedMeta = {};
+      if (showAddMetadata && Object.keys(addFormData.meta).length > 0) {
+        parsedMeta = addFormData.meta;
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_ENDPOINT || 'https://dev.dedi.global';
+      
+      // Publish the record directly using save-record-as-draft with publish=true
+      console.log('🔄 Publishing record directly');
+      const publishResponse = await fetch(`${API_BASE_URL}/dedi/${namespaceId}/${registryName}/save-record-as-draft?publish=true`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          record_name: addFormData.record_name.trim(),
+          description: addFormData.description.trim(),
+          details: finalDetails,
+          ...(Object.keys(parsedMeta).length > 0 && { meta: parsedMeta })
+        }),
+      });
+
+      const publishResult = await publishResponse.json();
+      console.log('📝 Publish API response:', publishResult);
+
+      if (publishResponse.ok) {
+        toast({
+          title: 'Success',
+          description: 'Record published successfully',
+        });
+        setIsAddModalOpen(false);
+        setAddFormData({
+          record_name: '',
+          description: '',
+          details: {},
+          meta: {},
+          arrayFields: {},
+        });
+        setShowAddMetadata(false);
+        // Refresh the records list
+        await fetchRecords();
+      } else {
+        toast({
+          title: 'Error',
+          description: publishResult.message || 'Failed to publish record',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error publishing record:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to publish record. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+
 
   const handleDetailsChange = (key: string, value: string) => {
     setAddFormData(prev => ({
@@ -673,7 +766,7 @@ export function RecordsPage() {
   // Get column headers from schema plus the record name column
   const getColumnHeaders = () => {
     const schemaProperties = schema.properties || schema;
-    const headers = ['Record Name', ...Object.keys(schemaProperties)];
+    const headers = ['Record Name', ...Object.keys(schemaProperties), 'Status'];
     return headers;
   };
 
@@ -681,6 +774,45 @@ export function RecordsPage() {
   const getCellValue = (record: RecordItem, column: string) => {
     if (column === 'Record Name') {
       return record.record_name;
+    }
+    
+    if (column === 'Status') {
+      const state = record.state?.toLowerCase() || 'unknown';
+      
+      switch (state) {
+        case 'draft':
+          return (
+            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
+              Draft
+            </Badge>
+          );
+        case 'published':
+        case 'active':
+        case 'live':
+          return (
+            <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+              {record.state === 'live' ? 'Live' : 'Published'}
+            </Badge>
+          );
+        case 'archived':
+          return (
+            <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-200">
+              Archived
+            </Badge>
+          );
+        case 'revoked':
+          return (
+            <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-200">
+              Revoked
+            </Badge>
+          );
+        default:
+          return (
+            <Badge variant="outline" className="bg-gray-100 text-gray-600 hover:bg-gray-200">
+              {record.state || 'Unknown'}
+            </Badge>
+          );
+      }
     }
     
     const value = record.details[column];
@@ -927,9 +1059,9 @@ export function RecordsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {records.map((record) => (
+                  {records.map((record, index) => (
                     <TableRow 
-                      key={record.record_id} 
+                      key={record.record_id || record.digest || `record-${index}`} 
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleRowClick(record)}
                     >
@@ -1243,18 +1375,28 @@ export function RecordsPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setIsAddModalOpen(false)} disabled={addLoading}>
               Cancel
             </Button>
-            <Button onClick={handleAddRecord} disabled={addLoading}>
+            <Button variant="secondary" onClick={handleSaveAsDraft} disabled={addLoading}>
+              {addLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                'Save as Draft'
+              )}
+            </Button>
+            <Button onClick={handlePublishRecord} disabled={addLoading}>
               {addLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Adding...
+                  Publishing...
                 </>
               ) : (
-                'Add Record'
+                'Publish Record'
               )}
             </Button>
           </DialogFooter>
