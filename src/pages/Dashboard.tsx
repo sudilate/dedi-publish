@@ -111,7 +111,13 @@ export function DashboardPage() {
       setLoading(true);
 
       console.log("🔄 Fetching namespaces from API...");
-      const result = await getNamespacesByProfile();
+      const result = await getNamespacesByProfile() as {
+        message: string;
+        data: {
+          owned_namespaces?: Namespace[];
+          delegated_namespaces?: Namespace[];
+        };
+      };
       console.log("📊 API response:", result);
 
       if (result.message === "User namespaces retrieved successfully") {
@@ -215,7 +221,11 @@ export function DashboardPage() {
         meta: meta,
       };
 
-      const result = await createNamespace(namespaceData);
+      const result = await createNamespace(namespaceData) as {
+        message: string;
+        data: { namespace_id: string };
+        error?: string; // Add the error property to the type
+      };
 
       if (result.message === "Namespace created successfully") {
         toast({
@@ -294,10 +304,14 @@ export function DashboardPage() {
         }
       );
 
-      const result = await response.json() as any;
+      const result = await response.json() as {
+        message?: string;
+        txt?: string;
+        error?: string;
+      };
 
       if (response.ok) {
-        setCreateModalGeneratedTxt(result.txt);
+        setCreateModalGeneratedTxt(result.txt ?? null);
         toast({
           title: "DNS TXT Record Generated",
           description: result.message || "DNS TXT record has been generated successfully.",
@@ -344,7 +358,9 @@ export function DashboardPage() {
         }),
       });
 
-      const result = await response.json() as any;
+      const result = await response.json() as {
+        message: string;
+      };
 
       if (response.ok) {
         toast({
@@ -414,7 +430,10 @@ export function DashboardPage() {
       const result = await updateNamespace(
         selectedNamespace.namespace_id,
         namespaceData
-      );
+      ) as {
+        message: string;
+        error?: string;
+      };
 
       console.log("🔍 Update namespace result:", result); // Debug log
       console.log("🔍 Result message:", result.message); // Debug log
@@ -447,7 +466,13 @@ export function DashboardPage() {
           );
 
           try {
-            const result = await getNamespacesByProfile();
+            const result = await getNamespacesByProfile() as {
+              message: string;
+              data: {
+                owned_namespaces?: Namespace[];
+                delegated_namespaces?: Namespace[];
+              };
+            };
 
             if (result.message === "User namespaces retrieved successfully") {
               const allNamespaces = [
@@ -560,7 +585,7 @@ export function DashboardPage() {
         }
       );
 
-      const result = await response.json() as any;
+      const result = await response.json();
 
       if (response.ok) {
         setGeneratedTxt(result.txt);
@@ -626,7 +651,7 @@ export function DashboardPage() {
         }),
       });
 
-      const result = await response.json() as unknown;
+      const result = await response.json();
 
       if (response.ok) {
         // Update the namespace as verified in the UI
@@ -732,7 +757,7 @@ export function DashboardPage() {
     navigate(`/namespaces/${namespaceId}?type=${isOwned ? 'owned' : 'delegated'}`);
   };
 
-  const handleMetaChange = (key: string, value: unknown) => {
+  const handleMetaChange = (key: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
       meta: {
@@ -1132,7 +1157,7 @@ export function DashboardPage() {
                               : JSON.stringify(formData.meta[key])
                           }
                           onChange={(e) => {
-                            let value: unknown = e.target.value;
+                            let value: string = e.target.value;
                             // Try to parse as JSON if it looks like an object
                             if (
                               value.startsWith("{") ||
@@ -1402,7 +1427,7 @@ export function DashboardPage() {
                               : JSON.stringify(formData.meta[key])
                           }
                           onChange={(e) => {
-                            let value: unknown = e.target.value;
+                            let value: string = e.target.value;
                             // Try to parse as JSON if it looks like an object
                             if (
                               value.startsWith("{") ||

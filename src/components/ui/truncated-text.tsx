@@ -1,17 +1,19 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TruncatedTextProps {
-  text: string;
+  text: string | undefined | null;
   maxLength?: number;
   className?: string;
 }
 
 export function TruncatedText({ text, maxLength = 100, className = "" }: TruncatedTextProps) {
-  const shouldTruncate = text.length > maxLength;
-  const truncatedText = shouldTruncate ? `${text.substring(0, maxLength)}...` : text;
+  // Handle undefined, null, or empty text
+  const safeText = text || "";
+  const shouldTruncate = safeText.length > maxLength;
+  const truncatedText = shouldTruncate ? `${safeText.substring(0, maxLength)}...` : safeText;
 
   if (!shouldTruncate) {
-    return <span className={className}>{text}</span>;
+    return <span className={className}>{safeText}</span>;
   }
 
   return (
@@ -23,7 +25,7 @@ export function TruncatedText({ text, maxLength = 100, className = "" }: Truncat
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-sm">
-          <p className="whitespace-pre-wrap">{text}</p>
+          <p className="whitespace-pre-wrap">{safeText}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

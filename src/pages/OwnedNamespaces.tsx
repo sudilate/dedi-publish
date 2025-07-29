@@ -58,7 +58,12 @@ export function OwnedNamespacesPage() {
       setLoading(true);
 
       console.log("🔄 Fetching owned namespaces from API...");
-      const result = await getNamespacesByProfile();
+      const result = await getNamespacesByProfile() as {
+        message: string;
+        data: {
+          owned_namespaces: Namespace[];
+        };
+      };
       console.log("📊 API response:", result);
 
       if (result.message === "User namespaces retrieved successfully") {
@@ -141,7 +146,12 @@ export function OwnedNamespacesPage() {
         }),
       });
 
-      const result = (await response.json()) as unknown;
+      const result = (await response.json()) as {
+        message: string;
+        data?: {
+          dnsTxt: string;
+        };
+      };
 
       if (response.ok) {
         setOwnedNamespaces((prev) =>

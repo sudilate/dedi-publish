@@ -55,7 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
 
         if (response.ok) {
-          const userData = await response.json() as any;
+          const userData = await response.json() as {
+            id: string;
+            email: string;
+            email_verified?: boolean;
+            name?: string;
+          };
           console.log("✅ User data received:", userData);
           setUser({
             id: userData.id,

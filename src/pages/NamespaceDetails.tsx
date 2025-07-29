@@ -76,13 +76,14 @@ import revokeSchema from "@/schema/revoke.json";
 
 // Utility function to extract properties from JSON schema
 const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } => {
-  const properties = (schema as any).properties || {};
+  const properties = (schema as { properties?: Record<string, unknown> }).properties || {};
   const extractedProps: { [key: string]: unknown } = {};
 
   const processProperty = (key: string, property: unknown): void => {
-    if ((property as any).type) {
+    const prop = property as { type?: string; properties?: Record<string, unknown>; items?: unknown };
+    if (prop.type) {
       // Handle different types
-      switch ((property as any).type) {
+      switch (prop.type) {
         case "string":
           extractedProps[key] = "string";
           break;
@@ -93,16 +94,17 @@ const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } =>
         case "boolean":
           extractedProps[key] = "boolean";
           break;
-        case "array":
+        case "array": {
           // Handle array with nested object properties
+          const items = prop.items as { type?: string; properties?: Record<string, unknown> } | undefined;
           if (
-            (property as any).items &&
-            (property as any).items.type === "object" &&
-            (property as any).items.properties
+            items &&
+            items.type === "object" &&
+            items.properties
           ) {
             const itemProperties: { [key: string]: string } = {};
-            Object.keys((property as any).items.properties).forEach((itemKey) => {
-              const itemProperty = (property as any).items.properties[itemKey];
+            Object.keys(items.properties).forEach((itemKey) => {
+              const itemProperty = items.properties![itemKey] as { type?: string };
               switch (itemProperty.type) {
                 case "string":
                   itemProperties[itemKey] = "string";
@@ -123,11 +125,12 @@ const extractSchemaProperties = (schema: unknown): { [key: string]: unknown } =>
             extractedProps[key] = "array";
           }
           break;
+        }
         case "object":
           // For objects, we'll flatten the nested properties
-          if ((property as any).properties) {
-            Object.keys((property as unknown).properties).forEach((nestedKey) => {
-              const nestedProperty = (property as unknown).properties[nestedKey];
+          if (prop.properties) {
+            Object.keys(prop.properties).forEach((nestedKey) => {
+              const nestedProperty = prop.properties![nestedKey];
               processProperty(`${key}_${nestedKey}`, nestedProperty);
             });
           } else {
@@ -157,7 +160,7 @@ const convertSchemaForAPI = (extractedSchema: {
 
   Object.keys(extractedSchema).forEach((key) => {
     const value = extractedSchema[key];
-    if (typeof value === "object" && value && (value as unknown).type === "array") {
+    if (typeof value === "object" && value && (value as { type?: string }).type === "array") {
       // For array types, we'll store as 'array' in the API
       apiSchema[key] = "array";
     } else {
@@ -204,7 +207,7 @@ interface Registry {
   digest: string;
   registry_id: string;
   registry_name: string;
-  description: string;
+  description?: string;
   created_by: string;
   schema: unknown;
   created_at: string;
@@ -219,17 +222,58 @@ interface Registry {
   meta: unknown;
 }
 
+// Helper function to map delegated API response to Registry interface
+const mapDelegatedRegistryItem = (item: {
+  digest?: string;
+  registry_id?: string;
+  record_registry_id?: string;
+  record_registry_name?: string;
+  registry_name?: string;
+  record_description?: string;
+  description?: string;
+  created_by?: string;
+  schema?: unknown;
+  record_schema?: unknown;
+  record_created_at?: string;
+  created_at?: string;
+  record_updated_at?: string;
+  updated_at?: string;
+  record_record_count?: number;
+  record_count?: number;
+  version_count?: number;
+  version?: string;
+  query_allowed?: boolean;
+  is_revoked?: boolean;
+  is_archived?: boolean;
+  record_is_revoked?: boolean;
+  record_is_archived?: boolean;
+  delegates?: unknown[];
+  meta?: unknown;
+}): Registry => ({
+  digest: item.digest || "",
+  registry_id: item.record_registry_id || item.registry_id || "",
+  registry_name: item.record_registry_name || item.registry_name || "",
+  description: item.record_description || item.description || "",
+  created_by: item.created_by || "",
+  schema: item.record_schema || item.schema || {},
+  created_at: item.record_created_at || item.created_at || "",
+  updated_at: item.record_updated_at || item.updated_at || "",
+  record_count: item.record_record_count || item.record_count || 0,
+  version_count: item.version_count || 0,
+  version: item.version || "",
+  query_allowed: item.query_allowed || false,
+  is_revoked: item.record_is_revoked || item.is_revoked || false,
+  is_archived: item.record_is_archived || item.is_archived || false,
+  delegates: item.delegates || [],
+  meta: item.meta || {}
+});
+
 interface RegistryFormData {
   name: string;
   description: string;
   schema: string;
   metadata: string;
   meta: { [key: string]: unknown };
-}
-
-interface SchemaField {
-  key: string;
-  type: string;
 }
 
 interface DelegateFormData {
@@ -289,23 +333,6 @@ interface BulkUploadStatusResponse {
     results: FileResult[];
     namespace: string;
   };
-}
-
-// Interface for search record
-interface SearchRecord {
-  id: string;
-  registry_name: string;
-  record_name: string;
-  details: { [key: string]: unknown };
-  created_at: string;
-  updated_at: string;
-  namespace_id: string;
-}
-
-// Interface for search response
-interface SearchResponse {
-  message: string;
-  data: SearchRecord[];
 }
 
 export function NamespaceDetailsPage() {
@@ -372,12 +399,9 @@ export function NamespaceDetailsPage() {
   const [showCreateMetadata, setShowCreateMetadata] = useState(false);
   const [showUpdateMetadata, setShowUpdateMetadata] = useState(false);
   const [selectedSchemaType, setSelectedSchemaType] = useState<string>("membership");
-  
-  // Search functionality state
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [searchResults, setSearchResults] = useState<SearchRecord[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  // const [schemaFields, setSchemaFields] = useState<Array<{ key: string; type: string }>>([{ key: "", type: "string" }]);
+  // const [showSchemaBuilder, setShowSchemaBuilder] = useState(false);
 
   // Search function - filters registries only
   const handleSearch = useCallback((query: string) => {
@@ -414,15 +438,13 @@ export function NamespaceDetailsPage() {
   };
 
   // Handle clicking on a search result
-  const handleSearchResultClick = (record: SearchRecord) => {
-    navigate(`/${namespaceId}/${record.registry_name}/${record.record_name}`);
-  };
+  // const handleSearchResultClick = (record: SearchRecord) => {
+  //   navigate(`/${namespaceId}/${record.registry_name}/${record.record_name}`);
+  // };
 
   // Clear search results
   const clearSearch = () => {
     setSearchQuery("");
-    setSearchResults([]);
-    setShowSearchResults(false);
   };
 
   // Define fetch functions before useEffect
@@ -480,7 +502,6 @@ export function NamespaceDetailsPage() {
       // Combine registries from both responses
       let allRegistries: Registry[] = [];
       let namespaceName = "Loading...";
-      let totalRegistriesCount = 0;
 
       // Handle active registries response
       if (activeResult.message === "Resource retrieved successfully") {
@@ -488,19 +509,21 @@ export function NamespaceDetailsPage() {
         if (activeResult.data && activeResult.data.registries) {
           allRegistries = [...allRegistries, ...activeResult.data.registries];
           namespaceName = activeResult.data.namespace_name || namespaceName;
-          totalRegistriesCount += activeResult.data.total_registries || 0;
+          // totalRegistriesCount += activeResult.data.total_registries || 0;
         }
       } else if (activeResult.message === "User registries retrieved successfully") {
         // Delegated namespace response structure
         if (Array.isArray(activeResult.data)) {
-          allRegistries = [...allRegistries, ...activeResult.data];
+          // Map delegated API fields to Registry interface
+          const mappedRegistries = activeResult.data.map(mapDelegatedRegistryItem);
+          allRegistries = [...allRegistries, ...mappedRegistries];
           // For delegated namespaces, extract namespace name from the first registry or use namespaceId as fallback
           if (activeResult.data.length > 0 && activeResult.data[0].namespace_name) {
             namespaceName = activeResult.data[0].namespace_name;
           } else if (namespaceId) {
             namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
           }
-          totalRegistriesCount += activeResult.data.length;
+          // totalRegistriesCount += activeResult.data.length;
         }
       }
 
@@ -513,19 +536,21 @@ export function NamespaceDetailsPage() {
           if (namespaceName === "Loading...") {
             namespaceName = revokedResult.data.namespace_name || namespaceName;
           }
-          totalRegistriesCount += revokedResult.data.total_registries || 0;
+          // totalRegistriesCount += revokedResult.data.total_registries || 0;
         }
       } else if (revokedResult.message === "User registries retrieved successfully") {
         // Delegated namespace response structure
         if (Array.isArray(revokedResult.data)) {
-          allRegistries = [...allRegistries, ...revokedResult.data];
+          // Map delegated API fields to Registry interface
+          const mappedRevokedRegistries = revokedResult.data.map(mapDelegatedRegistryItem);
+          allRegistries = [...allRegistries, ...mappedRevokedRegistries];
           // Only update namespace name if we haven't set it yet and data is available
           if (namespaceName === "Loading..." && revokedResult.data.length > 0 && revokedResult.data[0].namespace_name) {
             namespaceName = revokedResult.data[0].namespace_name;
           } else if (namespaceName === "Loading..." && namespaceId) {
             namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
           }
-          totalRegistriesCount += revokedResult.data.length;
+          // totalRegistriesCount += revokedResult.data.length;
         }
       }
 
@@ -646,7 +671,7 @@ export function NamespaceDetailsPage() {
           setTotalFiles(uploadStatus.totalFiles || 0);
           setProcessedFiles(uploadStatus.processedFiles || 0);
         }
-      } catch (error) {
+      } catch {
         localStorage.removeItem("bulkUploadStatus");
       }
     }
@@ -938,7 +963,7 @@ export function NamespaceDetailsPage() {
       // Combine registries from both responses
       let allRegistries: Registry[] = [];
       let namespaceName = "Loading...";
-      let totalRegistriesCount = 0;
+      // let totalRegistriesCount = 0;
 
       // Handle active registries response
       if (activeResult.message === "Resource retrieved successfully") {
@@ -946,19 +971,21 @@ export function NamespaceDetailsPage() {
         if (activeResult.data && activeResult.data.registries) {
           allRegistries = [...allRegistries, ...activeResult.data.registries];
           namespaceName = activeResult.data.namespace_name || namespaceName;
-          totalRegistriesCount += activeResult.data.total_registries || 0;
+          // totalRegistriesCount += activeResult.data.total_registries || 0;
         }
       } else if (activeResult.message === "User registries retrieved successfully") {
         // Delegated namespace response structure
         if (Array.isArray(activeResult.data)) {
-          allRegistries = [...allRegistries, ...activeResult.data];
+          // Map delegated API fields to Registry interface
+          const mappedRegistries = activeResult.data.map(mapDelegatedRegistryItem);
+          allRegistries = [...allRegistries, ...mappedRegistries];
           // For delegated namespaces, extract namespace name from the first registry or use namespaceId as fallback
           if (activeResult.data.length > 0 && activeResult.data[0].namespace_name) {
             namespaceName = activeResult.data[0].namespace_name;
           } else if (namespaceId) {
             namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
           }
-          totalRegistriesCount += activeResult.data.length;
+          // totalRegistriesCount += activeResult.data.length;
         }
       }
 
@@ -971,19 +998,21 @@ export function NamespaceDetailsPage() {
           if (namespaceName === "Loading...") {
             namespaceName = revokedResult.data.namespace_name || namespaceName;
           }
-          totalRegistriesCount += revokedResult.data.total_registries || 0;
+          // totalRegistriesCount += revokedResult.data.total_registries || 0;
         }
       } else if (revokedResult.message === "User registries retrieved successfully") {
         // Delegated namespace response structure
         if (Array.isArray(revokedResult.data)) {
-          allRegistries = [...allRegistries, ...revokedResult.data];
+          // Map delegated API fields to Registry interface
+          const mappedRegistries = revokedResult.data.map(mapDelegatedRegistryItem);
+          allRegistries = [...allRegistries, ...mappedRegistries];
           // Only update namespace name if we haven't set it yet and data is available
           if (namespaceName === "Loading..." && revokedResult.data.length > 0 && revokedResult.data[0].namespace_name) {
             namespaceName = revokedResult.data[0].namespace_name;
           } else if (namespaceName === "Loading..." && namespaceId) {
             namespaceName = namespaceId; // Use namespaceId as fallback for delegated namespaces
           }
-          totalRegistriesCount += revokedResult.data.length;
+          // totalRegistriesCount += revokedResult.data.length;
         }
       }
 
@@ -1166,9 +1195,9 @@ export function NamespaceDetailsPage() {
           metadata: "",
           meta: {},
         });
-        setSchemaFields([{ key: "", type: "string" }]);
+        // setSchemaFields([{ key: "", type: "string" }]);
         setShowCreateMetadata(false);
-        setShowSchemaBuilder(false);
+        // setShowSchemaBuilder(false);
         setSelectedSchemaType("membership");
         // Refresh the registries list
         await refreshRegistries();
@@ -1734,24 +1763,6 @@ export function NamespaceDetailsPage() {
     navigate(`/${namespaceId}/${registry.registry_name}`);
   };
 
-  const addSchemaField = () => {
-    setSchemaFields((prev) => [...prev, { key: "", type: "string" }]);
-  };
-
-  const removeSchemaField = (index: number) => {
-    setSchemaFields((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateSchemaField = (
-    index: number,
-    field: "key" | "type",
-    value: string
-  ) => {
-    setSchemaFields((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-    );
-  };
-
   const handleCreateMetaChange = (key: string, value: unknown) => {
     setCreateFormData((prev) => ({
       ...prev,
@@ -1854,39 +1865,46 @@ export function NamespaceDetailsPage() {
       </div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Your Registries</h1>
+          <h1 className="text-3xl font-bold">
+            {namespaceType === 'delegated' ? 'Shared Registries' : 'Your Registries'}
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Manage and organize your registries in this namespace
+            {namespaceType === 'delegated' 
+              ? 'View and access registries shared with you in this namespace'
+              : 'Manage and organize your registries in this namespace'
+            }
           </p>
         </div>
-        <div className="flex gap-4">
-          <Button
-            onClick={() => {
-              setIsCreateModalOpen(true);
-              setSelectedSchemaType("membership");
-              setShowSchemaBuilder(false);
-              setCreateFormData({
-                name: "",
-                description: "",
-                schema: "",
-                metadata: "",
-                meta: {},
-              });
-              setSchemaFields([{ key: "", type: "string" }]);
-              setShowCreateMetadata(false);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Registry
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setIsBulkUploadModalOpen(true)}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Bulk Upload
-          </Button>
-        </div>
+        {namespaceType !== 'delegated' && (
+          <div className="flex gap-4">
+            <Button
+              onClick={() => {
+                setIsCreateModalOpen(true);
+                setSelectedSchemaType("membership");
+                // setShowSchemaBuilder(false);
+                setCreateFormData({
+                  name: "",
+                  description: "",
+                  schema: "",
+                  metadata: "",
+                  meta: {},
+                });
+                // setSchemaFields([{ key: "", type: "string" }]);
+                setShowCreateMetadata(false);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create Registry
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkUploadModalOpen(true)}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Bulk Upload
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -2280,9 +2298,9 @@ export function NamespaceDetailsPage() {
                       onClick={() => {
                         setSelectedSchemaType(key);
                         if (key === "blank") {
-                          setShowSchemaBuilder(true);
+                          // setShowSchemaBuilder(true);
                         } else {
-                          setShowSchemaBuilder(false);
+                          // setShowSchemaBuilder(false);
                         }
                       }}
                     >
@@ -2311,8 +2329,9 @@ export function NamespaceDetailsPage() {
                                     ).map(([fieldKey, fieldValue]) => {
                                       if (
                                         typeof fieldValue === "object" &&
-                                        fieldValue.type === "array" &&
-                                        fieldValue.itemProperties
+                                        fieldValue &&
+                                        (fieldValue as { type?: string; itemProperties?: Record<string, string> }).type === "array" &&
+                                        (fieldValue as { type?: string; itemProperties?: Record<string, string> }).itemProperties
                                       ) {
                                         return (
                                           <div
@@ -2327,10 +2346,9 @@ export function NamespaceDetailsPage() {
                                                 array
                                               </span>
                                             </div>
-                                            <div className="ml-2 space-y-1">
-                                              {Object.entries(
-                                                fieldValue.itemProperties
-                                              ).map(([itemKey, itemType]) => (
+                                            <div className="ml-2 space-y-1">                                            {Object.entries(
+                                              (fieldValue as { itemProperties: Record<string, string> }).itemProperties
+                                            ).map(([itemKey, itemType]) => (
                                                 <div
                                                   key={itemKey}
                                                   className="flex justify-between"
@@ -2425,8 +2443,9 @@ export function NamespaceDetailsPage() {
                           // For array fields, just show the field type without input controls
                           if (
                             typeof value === "object" &&
-                            value.type === "array" &&
-                            value.itemProperties
+                            value &&
+                            (value as { type?: string; itemProperties?: Record<string, string> }).type === "array" &&
+                            (value as { type?: string; itemProperties?: Record<string, string> }).itemProperties
                           ) {
                             return (
                               <div
@@ -2445,7 +2464,7 @@ export function NamespaceDetailsPage() {
                                   <p className="font-medium mb-1">
                                     Array item fields:
                                   </p>
-                                  {Object.entries(value.itemProperties).map(
+                                  {Object.entries((value as { itemProperties: Record<string, string> }).itemProperties).map(
                                     ([itemKey, itemType]) => (
                                       <div
                                         key={itemKey}
@@ -2538,7 +2557,7 @@ export function NamespaceDetailsPage() {
                 <div className="grid gap-4">
                   {Object.keys(createFormData.meta).map((key, index) => (
                     <div
-                      key={index}
+                      key={key || `meta-create-${index}`}
                       className="grid grid-cols-1 md:grid-cols-2 gap-2"
                     >
                       <Input
@@ -2568,8 +2587,10 @@ export function NamespaceDetailsPage() {
                             let value: unknown = e.target.value;
                             // Try to parse as JSON if it looks like an object
                             if (
-                              value.startsWith("{") ||
-                              value.startsWith("[")
+                              typeof value === "string" && (
+                                value.startsWith("{") ||
+                                value.startsWith("[")
+                              )
                             ) {
                               try {
                                 value = JSON.parse(value);
@@ -2740,7 +2761,7 @@ export function NamespaceDetailsPage() {
                 <div className="grid gap-4">
                   {Object.keys(updateFormData.meta).map((key, index) => (
                     <div
-                      key={index}
+                      key={key || `meta-update-${index}`}
                       className="grid grid-cols-1 md:grid-cols-2 gap-2"
                     >
                       <Input

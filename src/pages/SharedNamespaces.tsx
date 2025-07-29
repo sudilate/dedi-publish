@@ -63,7 +63,12 @@ export function SharedNamespacesPage() {
       setLoading(true);
 
       console.log("🔄 Fetching shared namespaces from API...");
-      const result = await getNamespacesByProfile();
+      const result = await getNamespacesByProfile() as {
+        message: string;
+        data: {
+          delegated_namespaces: Namespace[];
+        };
+      };
       console.log("📊 API response:", result);
 
       if (result.message === "User namespaces retrieved successfully") {
@@ -142,7 +147,12 @@ export function SharedNamespacesPage() {
         }),
       });
 
-      const result = await response.json() as any;
+      const result = await response.json() as {
+        message: string;
+        data?: {
+          dnsTxt: string;
+        };
+      };
 
       if (response.ok) {
         setDelegatedNamespaces(prev =>

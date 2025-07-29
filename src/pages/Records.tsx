@@ -76,7 +76,7 @@ interface RecordsApiResponse {
     namespace_name: string;
     registry_name: string;
     registry_id: string;
-    schema: { [key: string]: any; properties?: { [key: string]: any } };
+    schema: { [key: string]: unknown; properties?: { [key: string]: unknown } };
     created_by: string;
     created_at: string;
     updated_at: string;
@@ -90,17 +90,17 @@ interface AddRecordFormData {
   record_name: string;
   description: string;
   details: { [key: string]: string };
-  meta: { [key: string]: any };
-  arrayFields: { [key: string]: any[] }; // Add array fields support
+  meta: { [key: string]: unknown };
+  arrayFields: { [key: string]: unknown[] }; // Add array fields support
 }
 
 // Interface for add record API response
-interface AddRecordApiResponse {
-  message: string;
-  data: {
-    record_id: string;
-  };
-}
+// interface AddRecordApiResponse {
+//   message: string;
+//   data: {
+//     record_id: string;
+//   };
+// }
 
 // Interface for search record
 interface SearchRecord {
@@ -160,7 +160,7 @@ export function RecordsPage() {
   const { toast } = useToast();
   
   const [records, setRecords] = useState<RecordItem[]>([]);
-  const [schema, setSchema] = useState<{ [key: string]: any; properties?: { [key: string]: any } }>({});
+  const [schema, setSchema] = useState<{ [key: string]: unknown; properties?: { [key: string]: unknown } }>({});
   const [namespaceName, setNamespaceName] = useState<string>('Loading...');
   const [registryDisplayName, setRegistryDisplayName] = useState<string>('Loading...');
   const [totalRecords, setTotalRecords] = useState<number>(0);
@@ -176,8 +176,7 @@ export function RecordsPage() {
     arrayFields: {},
   });
 
-  // State for tracking missing required fields
-  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [missingFields] = useState<string[]>([]);
 
   // Get schema type from registry name or schema properties
   const getSchemaType = (): string => {
@@ -393,7 +392,9 @@ export function RecordsPage() {
     
     Object.keys(schemaProperties).forEach(field => {
       const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
-      const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+      const fieldType = (fieldSchema && typeof fieldSchema === 'object' && 'type' in fieldSchema 
+        ? (fieldSchema as { type: string }).type?.toLowerCase() 
+        : 'string') || 'string';
       
       console.log(`🔧 Processing field: ${field}, type: ${fieldType}`);
       
@@ -460,7 +461,7 @@ export function RecordsPage() {
       arrayFields: {
         ...prev.arrayFields,
         [fieldKey]: prev.arrayFields[fieldKey]?.map((item: unknown, i) => 
-          i === index ? { ...item, [itemKey]: value } : item
+          i === index ? { ...(item as object), [itemKey]: value } : item
         ) || []
       }
     }));
@@ -499,26 +500,30 @@ export function RecordsPage() {
       const schemaProps = schema.properties || schema;
       Object.keys(schemaProps).forEach(field => {
         const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
-        const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+        const fieldType = (fieldSchema && typeof fieldSchema === 'object' && 'type' in fieldSchema 
+          ? (fieldSchema as { type: string }).type?.toLowerCase() 
+          : 'string') || 'string';
         const value = addFormData.details[field];
         
         if (value !== undefined && value !== '') {
           switch (fieldType) {
             case 'integer':
-            case 'int':
+            case 'int': {
               const intValue = parseInt(value, 10);
               if (!isNaN(intValue)) {
                 finalDetails[field] = intValue;
               }
               break;
+            }
             case 'number':
             case 'float':
-            case 'double':
+            case 'double': {
               const floatValue = parseFloat(value);
               if (!isNaN(floatValue)) {
                 finalDetails[field] = floatValue;
               }
               break;
+            }
             case 'boolean':
             case 'bool':
               finalDetails[field] = value === 'true' || value === '1';
@@ -535,7 +540,7 @@ export function RecordsPage() {
       Object.keys(addFormData.arrayFields).forEach(fieldKey => {
         const arrayItems = addFormData.arrayFields[fieldKey] || [];
         const validItems = arrayItems.filter(item => 
-          Object.values(item).some(val => val && String(val).trim() !== '')
+          Object.values(item as { [key: string]: unknown }).some(val => val && String(val).trim() !== '')
         );
         if (validItems.length > 0) {
           finalDetails[fieldKey] = validItems;
@@ -636,18 +641,21 @@ export function RecordsPage() {
       const schemaProps = schema.properties || schema;
       Object.keys(schemaProps).forEach(field => {
         const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
-        const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+        const fieldType = (fieldSchema && typeof fieldSchema === 'object' && 'type' in fieldSchema 
+          ? (fieldSchema as { type: string }).type?.toLowerCase() 
+          : 'string') || 'string';
         const value = addFormData.details[field];
         
         if (value !== undefined && value !== '') {
           switch (fieldType) {
             case 'integer':
-            case 'int':
+            case 'int': {
               const intValue = parseInt(value, 10);
               if (!isNaN(intValue)) {
                 finalDetails[field] = intValue;
               }
               break;
+            }
             case 'number':
             case 'float':
             case 'double':
@@ -672,7 +680,7 @@ export function RecordsPage() {
       Object.keys(addFormData.arrayFields).forEach(fieldKey => {
         const arrayItems = addFormData.arrayFields[fieldKey] || [];
         const validItems = arrayItems.filter(item => 
-          Object.values(item).some(val => val && String(val).trim() !== '')
+          Object.values(item as object).some(val => val && String(val).trim() !== '')
         );
         if (validItems.length > 0) {
           finalDetails[fieldKey] = validItems;
@@ -1163,7 +1171,9 @@ export function RecordsPage() {
                 {Object.keys(schema.properties || schema).map((field) => {
                   // Handle both simple schema format and JSON schema format
                   const fieldSchema = schema.properties ? schema.properties[field] : schema[field];
-                  const fieldType = (typeof fieldSchema === 'object' ? fieldSchema.type : fieldSchema)?.toLowerCase() || 'string';
+                  const fieldType = (fieldSchema && typeof fieldSchema === 'object' && 'type' in fieldSchema 
+                    ? (fieldSchema as { type: string }).type?.toLowerCase() 
+                    : 'string') || 'string';
                   const isNumeric = fieldType === 'integer' || fieldType === 'int' || fieldType === 'float' || fieldType === 'double' || fieldType === 'number';
                   const isBoolean = fieldType === 'boolean' || fieldType === 'bool';
                   const isArray = fieldType === 'array' && arrayFieldConfigs[field];
@@ -1215,7 +1225,7 @@ export function RecordsPage() {
                                     </Label>
                                     <Input
                                       id={`${field}-${index}-${itemKey}`}
-                                      value={item[itemKey] || ''}
+                                      value={(item as { [key: string]: string })[itemKey] || ''}
                                       onChange={(e) => updateArrayItem(field, index, itemKey, e.target.value)}
                                       placeholder={`Enter ${itemKey}`}
                                     />
@@ -1331,7 +1341,7 @@ export function RecordsPage() {
                           onChange={(e) => {
                             let value: unknown = e.target.value;
                             // Try to parse as JSON if it looks like an object
-                            if (value.startsWith('{') || value.startsWith('[')) {
+                            if (typeof value === "string" && (value.startsWith("{") || value.startsWith("["))) {
                               try {
                                 value = JSON.parse(value);
                               } catch {
