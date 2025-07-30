@@ -63,13 +63,14 @@ export interface ApiResponse<T> {
 // Registration API call - accepts email and name
 export async function registerUser(
   email: string,
-  name: string
+  name: string,
+  action: string
 ): Promise<ApiResponse<string>> {
   try {
     const response = await fetch(`${API_BASE_URL}/dedi/register`, {
       method: "POST",
       ...defaultFetchOptions,
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email, name, action }),
     });
 
     const result = await response.json();
